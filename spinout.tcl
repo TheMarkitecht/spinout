@@ -44,10 +44,8 @@
 # give a list of paths to search, separated by colons (:).
 
 ######  load all required packages.  ####################
-# this also serves to verify we're running in jimsh and not some other Tcl shell,
-# and that jimsh has oo support built-in, or can load it.
-package require oo
-package require ooExtend
+# this also serves to verify we're running in jimsh and not some other Tcl shell.
+package require slim
 
 ######  classes modeling the design.  ####################
 class Signal {
@@ -71,9 +69,8 @@ class Design {
     buses {}
 }
 
-# class method acting as object factory, to load a Design from a 
-# Notion exported CSV file describing it.
-proc {Design loadNotionCsv} {device csvFn} {
+# ctor loading a Design from a Notion exported CSV file describing it.
+Design method newLoadNotionCsv {device csvFn} {
     #TODO: eliminate obsolete pins etc
 #        if {[string match -nocase {*(n)} $name]} continue
  #       if {[string match -nocase {*remove pin*} [fetch $row Feature]]} continue
@@ -96,12 +93,12 @@ class Device {
     banks {}
 }
 
-# class method acting as object factory, to load a Device from a Spinout device file describing it.
-proc {Device load} {deviceFn} {
+# ctor loading a Device from a Spinout device file describing it.
+Device method newLoad {partNum deviceFn} {
 }
 
-# class method acting as object factory, to create a new empty Device with just a part number.
-proc {Device create} {partNum} {
+# ctor creating a new empty Device with just a part number.
+Device method newEmpty {partNum} {
 }
 
 Device method applyPackageQuartus {projectPath} {
@@ -142,7 +139,7 @@ DataRow method updateDic {row} {
     # map a list of values into a dictionary keyed by column headers.  memorize it in vDic.
     # this costs extra time on thousands of rows, so don't do it if not needed. 
     set vDic [dict create]
-    foreach v $vList h [$file get colmOrder] {
+    foreach v $vList h [$file colmOrder] {
         dict set vDic $h $v
     }
 }
@@ -163,16 +160,16 @@ class CsvFile DataTable {
     fn {}
 }
 
-# class method acting as object factory, to load a csvFile object graph into memory from 
+# load a csvFile object graph into memory from 
 # an ordinary .CSV disk file (comma-separated values).
-factory CsvFile load {rawFn} {
+CsvFile method newLoad {rawFn} {
     set fn $rawFn
     set f [open $fn r]
     set dataLines [lassign [split [read $f] \n ] headerLine]
     close $f
 
     # parse header line into csvColm objects and an indexing array.
-    set headers [[CsvRow fromRawLine $headerLine] get vList]
+    set headers [[CsvRow new newParse $headerLine] vList]
     # note that if the file was exported from Notion, it might contain nonprintable characters, 
     # especially at the start of the file.  those can prevent a naive script from recognizing the header row.  
     # here shave off characters to prevent that problem.
@@ -182,14 +179,14 @@ factory CsvFile load {rawFn} {
     }
     set idx -1
     foreach h $headers {
-        set colm [DataColm new [list name $h idx [incr idx]]]
+        set colm [DataColm new set name $h idx [incr idx]]
         lappend colmOrder $colm
         set colms($h) $colm
     }
 
     # parse data rows into objects.
     foreach ln $dataLines {
-        set row [CsvRow fromRawLine $ln]
+        set row [CsvRow new newParse $ln]
         
         # skip blank rows.
         set name [string trim [fetch $row Signal]]
@@ -202,8 +199,8 @@ factory CsvFile load {rawFn} {
 class CsvRow DataRow {
 }
 
-# class method acting as object factory, to split a raw line of CSV text into a row of data values.
-factory CsvRow fromRawLine {rawTextLine} {
+# split a raw line of CSV text into a row of data values.
+CsvRow method newParse {rawTextLine} {
     # remove surrounding quotes due to embedded commas.
     foreach {match bare delim1 quoted delim2 delim3} [regexp -all -inline $::CsvRow::itemRe $rawTextLine] {
         if {$quoted ne {}} {
@@ -239,36 +236,6 @@ class Spinout {
     design {}
 }
 
-proc {Spinout constructor} {} {
-}
-
-set junk {
-    # method dispatcher is not called directly by the user; it's plumbing.
-    Spinout method _dispatch {cmd args} {
-        if {cmd in [Spinout methods]} {
-            # dispatch this call to the singleton instance of Spinout.
-            tailcall $spinout $cmd {*}$args
-        } else {
-            # this command isn't recognized as a method; dispatch this call to elsewhere in the interp.
-            tailcall Spinout _old_unknown $cmd {*}$args
-        }
-    }
-
-    proc {Spinout _old_unknown} {cmd args} {
-        tailcall error "Unknown command: $cmd"
-    }
-
-    proc {Spinout init} {} {
-        # insert a new procedure (the Spinout dispatcher) in the chain of "unknown" command handlers.
-        if {[exists -command unknown]} {
-            rename unknown {Spinout _old_unknown}
-        }
-        alias unknown Spinout _dispatch
-    }
-}
-
-
-
 # class method to initialize command shortcuts using a singleton instance of Spinout.
 # using this is optional.  without it, you can still instantiate and use Spinout's 
 # object models directly.  that way is less suitable for the command line, and 
@@ -287,11 +254,11 @@ proc {Spinout shortcuts} {} {
 }
 
 Spinout method loadDevice {deviceFn} {
-    set device [Device load $self $deviceFn]
+    set device [Device new newLoad $self $deviceFn]
 }
 
 Spinout method loadDesignNotionCsv {csvFn} {
-    set design [Design loadNotionCsv $self $device $csvFn]
+    set design [Design new newLoadNotionCsv $self $device $csvFn]
 }
 
 Spinout method applyBanksNotionCsv {csvFn} {
