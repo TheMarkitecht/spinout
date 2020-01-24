@@ -67,8 +67,10 @@ class CsvFile DataTable {
 CsvFile method newLoad {rawFn} {
     set fn $rawFn
     set f [open $fn r]
-    set dataLines [lassign [split [read $f] \n ] headerLine]
+    set raw [string map [list \r {}] [read $f]]
     close $f
+    set dataLines [lassign [split $raw \n ] headerLine]
+    unset raw
 
     # parse header line into csvColm objects and an indexing array.
     set headers [[CsvRow new newParse $headerLine] vList]
@@ -81,6 +83,7 @@ CsvFile method newLoad {rawFn} {
     }
     set idx -1
     foreach h $headers {
+        set h [string trim $h]
         set colm [DataColm new set name $h idx [incr idx]]
         lappend colmOrder $colm
         set colms($h) $colm
@@ -91,8 +94,7 @@ CsvFile method newLoad {rawFn} {
         set row [CsvRow new newParse $ln]
         
         # skip blank rows.
-        set first [string trim [$row byIdx 0]]
-        if {$first eq {} } continue    
+        if {[$row byIdx 0] eq {} } continue    
         
         $self addRow $row    
     }
@@ -106,9 +108,9 @@ CsvRow method newParse {rawTextLine} {
     # remove surrounding quotes due to embedded commas.
     foreach {match bare delim1 quoted delim2 delim3} [regexp -all -inline $::CsvRow::itemRe $rawTextLine] {
         if {$quoted ne {}} {
-            lappend vList $quoted
+            lappend vList [string trim $quoted]
         } else {
-            lappend vList $bare
+            lappend vList [string trim $bare]
         }
     }
 }

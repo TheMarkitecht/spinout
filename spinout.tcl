@@ -65,8 +65,10 @@ class Signal {
     features {}
     direction {}
     standard {}
+    rate {}
 }
 
+# ctor loading a Signal from a row of a Notion exported CSV file describing it.
 Signal method newFromNotionRow {design_ row} {
     set design $design_
     set device [$design device]
@@ -92,6 +94,18 @@ Signal method newFromNotionRow {design_ row} {
     foreach feat [split [$row byName Feature] , ] {
         lappend features [string trim $feat]
     }
+    
+    set direction [$row byName Direction]
+    set standard [$row byName {I/O Standard}]
+    set rate [$row byName {Traffic Level}]
+}
+
+proc {Signal compareNames} {sigA sigB} {
+    set a [$sigA name]
+    set b [$sigB name]
+    if {$a < $b} {return -1}
+    if {$a > $b} {return 1}
+    return 0
 }
 
 class Bus {
@@ -141,6 +155,44 @@ Design method newLoadNotionCsv {device_ csvFn} {
         }
         set signals($name) $sig
     }
+}
+
+Design method signalsSortedByName {} {
+    return [lmap n [lsort [dict keys $signals]] {$self signal $n}]
+}
+
+Design method saveAssignmentsQuartus {assignmentScriptFn} {
+    set asn [open $assignmentScriptFn w]
+    set rawTotal 0
+    foreach sig [$self signalsSortedByName] {    
+        set name [$sig name]   
+        if {[$sig bank] eq {}} {
+            error "Signal $name has no bank assigned."
+        }
+        if {[$sig standard] eq {}} {
+            error "Signal $name has no I/O standard assigned."
+        }
+        puts $asn "
+            set_location_assignment  IOBANK_[[$sig bank] num]  -to {$name}
+            set_instance_assignment  -name IO_STANDARD {[$sig standard]}  -to {$name}
+            set_instance_assignment  -name CURRENT_STRENGTH_NEW {MAXIMUM CURRENT}  -to {$name}
+            set_instance_assignment  -name SLOW_SLEW_RATE off  -to {$name}
+        "
+        set rate [string trim [$sig rate]]
+        if {$rate ne {}} {
+            if {[string is integer -strict $rate]} {
+                set rate "$rate MHz"
+            }
+            puts $asn "
+            set_instance_assignment  -name IO_MAXIMUM_TOGGLE_RATE {$rate}  -to {$name}
+            "
+        }
+        #TODO: assign actual drive current.
+        #TODO: assign "power toggle rate" and "synchronizer toggle rate" in addition to max toggle rate.
+        incr rawTotal
+    }
+    puts $asn "# Assigned $rawTotal signals."
+    close $asn
 }
 
 ######  classes modeling the device package.  ####################
@@ -229,12 +281,18 @@ class EmptyClass {} {
     junk {}
 }
 
-# this class models the Spinout tool as a whole.
+# Spinout class models the Spinout tool as a whole.
+#
 # the main goal of this class is to map the user's command semantics onto
 # the details of the object-oriented semantics of the object models.
+#
+# a second goal is to provide any printed feedback the user needs.
+# the data structure classes avoid doing that.
+#
 # methods in this class are commands available to the user.
-# variables in this class are ones the user would typically think of as "globals".
-# many of his commands will deal with those variables by default, without him
+#
+# variables in this class are used as "globals", because
+# many user commands will deal with those variables by default, without him
 # mentioning those variables explicitly.
 class Spinout {
     device {}
@@ -293,21 +351,14 @@ Spinout method applyFittedPinsQuartus {} {
 Spinout method saveDesignNotionCsv {csvFn} {
 }
 
-Spinout method saveDesignQuartus {} {
-    #TODO: generate assignments file.  move in old code to do that.
-    # and print instructions for including it in the project.
-    # or, just do that automatically.  through another command?
+Spinout method saveAssignmentsQuartus {assignmentScriptFn} {
+    puts "Writing $assignmentScriptFn"
+    $design saveAssignmentsQuartus $assignmentScriptFn
+    #TODO: print instructions for inserting it in the project.
+    # or, just insert it automatically.  through another command?
 }
 
 ######  utility procedures  ####################
-
-proc compareSignalName {rowA rowB} {
-    set a [fetch $rowA Signal]
-    set b [fetch $rowB Signal]
-    if {$a < $b} {return -1}
-    if {$a > $b} {return 1}
-    return 0
-}
 
 ######  global variables and pseudo-constants.  ####################
 set ::spinout {} ;# the singleton instance of Spinout.
@@ -315,36 +366,3 @@ set ::spinout {} ;# the singleton instance of Spinout.
 ######  main script.  ####################
 package provide spinout 0.1
 
-set old_code {
-# sort data rows.
-set DataRows [lsort -command compareSignalName $DataRows]
-
-# generate assignments.
-set outFn ../../hdl/project/io_banks.tcl
-putsInfo "Writing $outFn"
-set asn [open $outFn w]
-set rawTotal 0
-foreach row $DataRows {    
-    set name [fetch $row Signal]   
-    puts $asn "
-        set_location_assignment  IOBANK_[fetch $row {I/O Bank}]  -to {$name}
-        set_instance_assignment  -name IO_STANDARD {[fetch $row {I/O Standard}]}  -to {$name}
-        set_instance_assignment  -name CURRENT_STRENGTH_NEW {MAXIMUM CURRENT}  -to {$name}
-        set_instance_assignment  -name SLOW_SLEW_RATE off  -to {$name}
-    "
-    set rate [string trim [fetch $row {Traffic Level}]]
-    if {$rate ne {}} {
-        if {[string is integer -strict $rate]} {
-            set rate "$rate MHz"
-        }
-        puts $asn "
-        set_instance_assignment  -name IO_MAXIMUM_TOGGLE_RATE {$rate}  -to {$name}
-        "
-    }
-    #TODO: assign actual drive current.
-    #TODO: assign "power toggle rate" and "synchronizer toggle rate" in addition to max toggle rate.
-    incr rawTotal
-}
-close $asn
-putsInfo "Assigned $rawTotal signals."
-}
