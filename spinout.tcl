@@ -144,15 +144,15 @@ DataRow method updateDic {row} {
     }
 }
 
-DataRow method vByIdx {colmIdx} {
+DataRow method byIdx {colmIdx} {
     # return the value in the given column number.
     return [lindex $vList $colmIdx]
 }
 
-DataRow method vByName {colmName} {
+DataRow method byName {colmName} {
     # return the value in the given column name.
     # this is done without vDic, so vDic doesn't have to be built if it's not needed.
-    return [lindex $vList [[$file colmByName $colmName] idx]]
+    return [lindex $vList [[$table colmByName $colmName] idx]]
 }
 
 # CsvFile is a specialization (subclass) of DataTable.
@@ -189,8 +189,8 @@ CsvFile method newLoad {rawFn} {
         set row [CsvRow new newParse $ln]
         
         # skip blank rows.
-        set name [string trim [fetch $row Signal]]
-        if {$name eq {} } continue    
+        set first [string trim [$row byIdx 0]]
+        if {$first eq {} } continue    
         
         lappend rows $row    
     }
