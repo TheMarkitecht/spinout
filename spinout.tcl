@@ -49,12 +49,49 @@ package require slim
 package require DataTable
 
 ######  classes modeling the design.  ####################
+
+# only one of pin or bank are ever set.
+# if pin is known, it is set and bank is not.  bank is then accessible through the pin object.
+# if only the bank is known, it is set and pin is not.
+# if neither is known, neither is set.
+# features is a Tcl list.
 class Signal {
+    design {}
+    name {}
     bus {}
-    bank {}
+    busIdx {}
     pin {}
+    bank {}
+    features {}
     direction {}
     standard {}
+}
+
+Signal method newFromNotionRow {design_ row} {
+    set design $design_
+    set device [$design device]
+    
+    set name [$row byName Signal]
+    
+    set bankNum [$row byName {I/O Bank}]
+    if {$bankNum ne {}} {
+        if { ! [$device bankExists $bankNum]} {
+            error "Bank $bankNum doesn't exist.  Row: [$row vList]"
+        }
+        set bank [$device bank $bankNum]
+    }
+    
+    set pinNum [$row byName Location]
+    if {$pinNum ne {}} {
+        if { ! [$device pinExists $pinNum]} {
+            error "Pin $pinNum doesn't exist.  Row: [$row vList]"
+        }
+        set pin [$device pin $pinNum]
+    }
+    
+    foreach feat [split [$row byName Feature] , ] {
+        lappend features [string trim $feat]
+    }
 }
 
 class Bus {
@@ -64,10 +101,20 @@ class Bus {
 }
 
 class Design {
-    spinout {}
     device {}
     signals {}
     buses {}
+}
+
+Design method signalExists {signalName} {
+    exists signals($signalName)
+}
+    
+Design method signal {signalName} {
+    if { ! [exists signals($signalName)]} {
+        error "Signal $signalName doesn't exist."
+    }
+    return $signals($signalName)
 }
 
 # ctor loading a Design from a Notion exported CSV file describing it.
@@ -76,26 +123,40 @@ Design method newLoadNotionCsv {device_ csvFn} {
     
     set tbl [CsvFile new newLoad $csvFn]
     
-    # eliminate obsolete pins etc
+    # this step, setting up the device right here, should be made obsolete in the future.
+    $device inferFromNotion $tbl
     
-#        if {[string match -nocase {*(n)} $name]} continue
- #       if {[string match -nocase {*remove pin*} [fetch $row Feature]]} continue
+    # read rows into Signal objects.
+    foreach row [$tbl rows] {
+        set sig [Signal new newFromNotionRow $self $row]
+        set name [$sig name]
+        
+        # ignore obsolete pins etc.
+        if {$name eq {}} continue
+        if {{Remove Pin} in [$sig features]} continue
+        if {[string match -nocase *(n) $name]} continue
+        
+        if {[exists signals($name)]} {
+            error "Signal $signalName already exists. Row: [$row vList]"
+        }
+        set signals($name) $sig
+    }
 }
 
 ######  classes modeling the device package.  ####################
 class Pin {
-    bank {}
     pinNum {}
+    bank {}
 }
 
 class Bank {
-    num 0
-    pins {}
+    num {}
 }
 
+# banks and pins are kept in dictionaries rather than lists, to allow for different vendors' numbering schemes.
 class Device {
-    spinout {}
     partNum {}
+    pins {}
     banks {}
 }
 
@@ -111,6 +172,56 @@ Device method applyPackageQuartus {projectPath} {
     #TODO: extract the device package's available pins and banks into the device object model.
 }
 
+Device method pinExists {pinNum} {
+    exists pins($pinNum)
+}
+    
+Device method pin {pinNum} {
+    if { ! [exists pins($pinNum)]} {
+        error "Pin $pinNum doesn't exist."
+    }
+    return $pins($pinNum)
+}
+
+Device method bankExists {bankNum} {
+    exists banks($bankNum)
+}
+    
+Device method bank {bankNum} {
+    if { ! [exists banks($bankNum)]} {
+        error "Bank $bankNum doesn't exist."
+    }
+    return $banks($bankNum)
+}
+
+Device method addPin {pinNum bankNum} {
+    if {[exists pins($pinNum)]} {error "Pin $pinNum already exists."}
+    return [set pins($pinNum) [Pin new set pinNum $pinNum bank $banks($bankNum)]]
+}
+
+Device method addBank {bankNum} {
+    if {[exists banks($bankNum)]} {error "Bank $bankNum already exists."}
+    return [set banks($bankNum) [Bank new set num $bankNum]]
+}
+
+# builds an incomplete model of the device from whatever info can be extracted from the given
+# design's pin list table exported from Notion.
+# this method should be made obsolete in the future when complete device models can be extracted from Quartus.
+Device method inferFromNotion {tbl} {
+    # read rows into Pin objects.
+    foreach row [$tbl rows] {
+        set bankNum [$row byName {I/O Bank}]
+        if {$bankNum ne {}} {
+            if { ! [exists banks($bankNum)]} {
+                $self addBank $bankNum
+            }
+        }
+        set pinNum [$row byName {Location}]
+        if {$pinNum ne {}} {
+            $self addPin $pinNum $bankNum
+        }
+    }
+}
 
 ######  classes modeling the user's available commands  ####################
 
@@ -138,21 +249,32 @@ proc {Spinout shortcuts} {} {
     set ::spinout [Spinout new]
     
     # make each Spinout method accessible as a bare command name in the interp.
-    # this way the user doesn't have to type "spinout" on every command, and yet
+    # this way the user doesn't have to type "$spinout" on every command, and yet
     # the command still gets the benefits of being implemented as a method.
     foreach m [Spinout methods] {
         if {$m ni [EmptyClass methods]} {
-            alias $m ::spinout $m
+            alias $m $::spinout $m
         }
     }
 }
 
+# accessors for important structures.
+Spinout method device {} {return $device}
+Spinout method pins {} {$device pins}
+Spinout method banks {} {$device banks}
+Spinout method design {} {return $design}
+Spinout method signals {} {$design signals}
+
+Spinout method createDevice {brand partNum} {
+    set device [Device new set brand $brand partNum $partNum]
+}
+
 Spinout method loadDevice {deviceFn} {
-    set device [Device new newLoad $self $deviceFn]
+    set device [Device new newLoad $deviceFn]
 }
 
 Spinout method loadDesignNotionCsv {csvFn} {
-    set design [Design new newLoadNotionCsv $self $device $csvFn]
+    set design [Design new newLoadNotionCsv $device $csvFn]
 }
 
 Spinout method applyBanksNotionCsv {csvFn} {

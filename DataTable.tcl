@@ -17,6 +17,11 @@ DataTable method colmByIdx {colmIdx} {
     return [lindex $colmOrder $colmIdx]
 }
 
+DataTable method addRow {row} {
+    $row setTable $self
+    lappend rows $row
+}
+
 class DataColm {
     name {}
     idx 0
@@ -26,6 +31,10 @@ class DataRow {
     table {}
     vList {}
     vDic {}
+}
+
+DataRow method setTable {tbl} {
+    set table $tbl
 }
 
 DataRow method updateDic {row} {
@@ -85,7 +94,7 @@ CsvFile method newLoad {rawFn} {
         set first [string trim [$row byIdx 0]]
         if {$first eq {} } continue    
         
-        lappend rows $row    
+        $self addRow $row    
     }
 }
 
