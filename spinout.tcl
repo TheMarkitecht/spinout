@@ -44,7 +44,8 @@
 # give a list of paths to search, separated by colons (:).
 
 ######  load all required packages.  ####################
-# this also serves to verify we're running in jimsh and not some other Tcl shell.
+# this also serves to verify we're running in jimsh and not some other Tcl shell,
+# and that jimsh has oo support built-in, or can load it.
 package require oo
 package require ooExtend
 
