@@ -206,16 +206,14 @@ Design method loadAssignmentsQuartus {spinout projectFn} {
     set quartusTempResultFn [formatPathFor $tempResultFn [$spinout quartus_sh]]
     
     set script "
+        set signals {[lsort [dict keys $signals]]}
         project_open {[formatPathFor $projectFn [$spinout quartus_sh]]}
         set outf \[ open {$quartusTempResultFn} w \]
     "
-    foreach sig [$self signalsSortedByName] {    
-        append script "
-            puts \$outf {[$sig name]}
-            puts \$outf pin:\[get_location_assignment -to {[$sig name]} \]
-        "
-    }
     append script {
+        foreach sig $signals {    
+            puts $outf [list $sig [get_location_assignment -to $sig]]
+        }
         close $outf
         exit
     }
@@ -223,9 +221,10 @@ Design method loadAssignmentsQuartus {spinout projectFn} {
     $spinout runQuartusScript $script
     
     set f [open $tempResultFn r]
-    puts results:\n[read $f]
+    set dic [dict merge [read $f]]
     close $f
     #file delete $tempResultFn
+    puts results:\n$dic
     
 #get_location_assignment -to clock20m
 #PIN_G2
