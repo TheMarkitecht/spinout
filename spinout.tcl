@@ -46,6 +46,7 @@
 ######  load all required packages.  ####################
 # this also serves to verify we're running in jimsh and not some other Tcl shell.
 package require slim
+package require util
 package require DataTable
 
 ######  classes modeling the design.  ####################
@@ -195,6 +196,41 @@ Design method saveAssignmentsQuartus {assignmentScriptFn} {
     close $asn
 }
 
+# extract existing pin number assignments from Quartus.
+# projectFn must refer to a .qpf file.  on Windows, that name can be 
+# in c:\dir\name.qpf format,
+# or c:/dir/name.qpf format.
+Design method loadAssignmentsQuartus {spinout projectFn} {
+    set tmp [systemTempDir]
+    set tempResultFn [f+ $tmp quartus.result]
+    set quartusTempResultFn [formatPathFor $tempResultFn [$spinout quartus_sh]]
+    
+    set script "
+        project_open {[formatPathFor $projectFn [$spinout quartus_sh]]}
+        set outf \[ open {$quartusTempResultFn} w \]
+    "
+    foreach sig [$self signalsSortedByName] {    
+        append script "
+            puts \$outf {[$sig name]}
+            puts \$outf pin:\[get_location_assignment -to {[$sig name]} \]
+        "
+    }
+    append script {
+        close $outf
+        exit
+    }
+
+    $spinout runQuartusScript $script
+    
+    set f [open $tempResultFn r]
+    puts results:\n[read $f]
+    close $f
+    #file delete $tempResultFn
+    
+#get_location_assignment -to clock20m
+#PIN_G2
+}
+
 ######  classes modeling the device package.  ####################
 class Pin {
     pinNum {}
@@ -297,6 +333,10 @@ class EmptyClass {} {
 class Spinout {
     device {}
     design {}
+    quartusDir {}
+    quartus_sh {}
+    quartus_cmd {}
+    quartus_sta {}
 }
 
 # class method to initialize command shortcuts using a singleton instance of Spinout.
@@ -316,12 +356,61 @@ proc {Spinout shortcuts} {} {
     }
 }
 
-# accessors for important structures.
+# convenient accessors for important structures.
 Spinout method device {} {return $device}
 Spinout method pins {} {$device pins}
 Spinout method banks {} {$device banks}
 Spinout method design {} {return $design}
 Spinout method signals {} {$design signals}
+
+# specifies the directory where Quartus command-line tool binaries such as 
+# quartus_sh.exe can be found.  this must be done before any commands that
+# use Quartus or Quartus projects can be invoked.  otherwise those will
+# throw errors and abort the script.
+# this should name a specific Quartus version number and license edition.  
+# on Windows, this can be in the 
+# c:\dir\dir format, which is native for Windows, or the 
+# c:/dir/dir format, which is more convenient when working in Tcl.
+# for example C:/intelFPGA_lite/18.1/quartus/bin64
+# if you have only one installation of Quartus, you can use the standard
+# environment variable from the Quartus installation, passing something like
+# [f+ [env QUARTUS_ROOTDIR] bin64]
+Spinout method setQuartusDir {dir} {
+    set quartusDir [f+ [pwd] $dir]
+}
+
+Spinout method findQuartusTools {} {
+    set quartus_sh [findExecutable quartus_sh $quartusDir]
+    if {$quartus_sh eq {}} {
+        error "Could not find Quartus tools at any of:  [join [executableSearchDirs $quartusDir] {  }]"
+    }
+    # any further Quartus tools are just assumed to be in the same dir.
+    set foundDir [file dirname $quartus_sh]
+    set quartus_cmd [f+ $foundDir quartus_cmd]
+    set quartus_sta [f+ $foundDir quartus_sta]
+}
+
+# invoke quartus_sh.  feed the given script text into it.
+# quartus stdin, stdout and stderr channel contents are not offered as parameters here because
+# those are generally useless due to quartus writing lots of extra boilerplate output to them.
+# but their content is returned from this method just in case it's useful somehow.
+Spinout method runQuartusScript {scriptText} {
+    # create temporary file for script.  this approach is required instead of piping directly, 
+    # to support longer scripts in certain operating system configurations.
+    set tmp [systemTempDir]
+    set scriptFn [f+ $tmp quartus.script]
+    set qScriptFn [formatPathFor $scriptFn [$self quartus_sh]]
+    set f [open $scriptFn w]
+    puts $f $scriptText
+    close $f
+    set diagnosticText [x -ignore [$self quartus_sh] -t $qScriptFn]
+    #file delete $scriptFn
+    if {$childExitStatus != 0} {
+        puts stderr "\nQuartus shell failed: [$self quartus_sh]\nQuartus diagnostic output:\n\n${diagnosticText}\n"
+        error "Quartus shell failed: [$self quartus_sh]" ;# this causes a stack dump showing user what Spinout was doing at the time.
+    }
+    return $diagnosticText
+}
 
 Spinout method createDevice {brand partNum} {
     set device [Device new set brand $brand partNum $partNum]
@@ -356,6 +445,23 @@ Spinout method saveAssignmentsQuartus {assignmentScriptFn} {
     $design saveAssignmentsQuartus $assignmentScriptFn
     #TODO: print instructions for inserting it in the project.
     # or, just insert it automatically.  through another command?
+}
+
+Spinout method loadAssignmentsQuartus {projectFn} {
+    $self findQuartusTools
+    $design loadAssignmentsQuartus $self $projectFn
+}
+
+# removes (deletes) text lines containing tool messages output by Quartus tools.
+# messageTypes must be a Tcl list of one or more of:
+#   info  extra_info  warning  critical_warning  error
+# if the wildcard * appears anywhere in the list, this will remove 
+# all types of messages from the text.
+Spinout method removeMessages {messagetypes quartusOutputText} {
+    #TODO: delete this method.  it's impractical because Quartus outputs its "tcl>" prompt
+    # in the output stream, in almost random positions.
+    # instead scripts must always write their output to a disk file.
+    return $quartusOutputText
 }
 
 ######  utility procedures  ####################

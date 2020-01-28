@@ -15,3 +15,8 @@ createDevice Altera 3C16F484
 loadDesignNotionCsv tests/Pin-List.csv
 puts "loaded [dict size [signals]] signals on [dict size [banks]] banks."
 saveAssignmentsQuartus tests/io_assign.tcl
+
+
+# extract existing pin number assignments from Quartus.
+setQuartusDir C:/intelFPGA_lite/18.1/quartus/bin64
+loadAssignmentsQuartus junk
