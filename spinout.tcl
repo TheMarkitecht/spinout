@@ -353,7 +353,8 @@ Device method loadPackageIntelPinoutFile {pinoutCsvFn packageColumnName} {
     # load the CsvFile contents into the Device data structure.
     foreach row [$tbl rows] {
         set pinNum [$row byName $packageColumnName]
-        if {$pinNum eq {}} continue
+        if {$pinNum eq {}} continue ;# skip blank lines and commentary lines.
+        if {[llength [split $pinNum]] != 1} continue ;# skip blank lines and commentary lines.
         set bankNum [$row byName {Bank Number}]
         if { ! [string match {B[01-9]*} $bankNum]} {
             error "Pin '$pinNum' specifies bank number '$bankNum' which is not in the expected format."
