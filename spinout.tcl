@@ -51,18 +51,20 @@ package require DataTable
 
 ######  classes modeling the design.  ####################
 
-# only one of pin or bank are ever set.
-# if pin is known, it is set and bank is not.  bank is then accessible through the pin object.
-# if only the bank is known, it is set and pin is not.
-# if neither is known, neither is set.
-# features is a Tcl list.
+# only one of pin or prelimBank are ever set.
+# if pin is known, it is set to a Pin object and prelimBank is empty.  
+# then the actual bank is accessible through the pin object.
+# if only the bank is known, then it's assumed to be a preliminary estimated
+# bank assignment.  then prelimBank is set to a Bank object and pin is empty.
+# if both are unknown, both are empty.
+# features is a Tcl list of strings.
 class Signal {
     design {}
     name {}
     bus {}
     busIdx {}
     pin {}
-    bank {}
+    prelimBank {}
     features {}
     direction {}
     standard {}
@@ -77,19 +79,17 @@ Signal method newFromNotionRow {design_ row} {
     set name [$row byName Signal]
     
     set bankNum [$row byName {I/O Bank}]
-    if {$bankNum ne {}} {
-        if { ! [$device bankExists $bankNum]} {
-            error "Bank $bankNum doesn't exist.  Row: [$row vList]"
-        }
-        set bank [$device bank $bankNum]
-    }
-    
     set pinNum [$row byName Location]
     if {$pinNum ne {}} {
         if { ! [$device pinExists $pinNum]} {
             error "Pin $pinNum doesn't exist.  Row: [$row vList]"
         }
         set pin [$device pin $pinNum]
+    } elseif {$bankNum ne {}} {
+        if { ! [$device bankExists $bankNum]} {
+            error "Bank $bankNum doesn't exist.  Row: [$row vList]"
+        }
+        set prelimBank [$device bank $bankNum]
     }
     
     foreach feat [split [$row byName Feature] , ] {
@@ -99,6 +99,31 @@ Signal method newFromNotionRow {design_ row} {
     set direction [$row byName Direction]
     set standard [$row byName {I/O Standard}]
     set rate [$row byName {Traffic Level}]
+}
+
+Signal method setPinNum {pinNum} {
+    set prelimBank {}
+    set pin [[$design device] pin $pinNum]
+}
+
+Signal method setPrelimBankNum {bankNum} {
+    set pin {}
+    set prelimBank [[$design device] bank $bankNum]
+}
+
+# can return the number of the prelimBank, or the bank number of the pin if it's known,
+# or an empty string if neither are known.
+Signal method bankNum {} {
+    if {$pin ne {}} {
+        #puts stderr pin:$pin
+        #puts stderr bank:[$pin bank]
+        #puts stderr num:[[$pin bank] num]
+        return [[$pin bank] num]
+    }
+    if {$prelimBank ne {}} {
+        return [$prelimBank num]
+    }
+    return {}
 }
 
 proc {Signal compareNames} {sigA sigB} {
@@ -167,14 +192,14 @@ Design method saveAssignmentsQuartus {assignmentScriptFn} {
     set rawTotal 0
     foreach sig [$self signalsSortedByName] {    
         set name [$sig name]   
-        if {[$sig bank] eq {}} {
+        if {[$sig bankNum] eq {}} {
             error "Signal $name has no bank assigned."
         }
         if {[$sig standard] eq {}} {
             error "Signal $name has no I/O standard assigned."
         }
         puts $asn "
-            set_location_assignment  IOBANK_[[$sig bank] num]  -to {$name}
+            set_location_assignment  IOBANK_[$sig bankNum]  -to {$name}
             set_instance_assignment  -name IO_STANDARD {[$sig standard]}  -to {$name}
             set_instance_assignment  -name CURRENT_STRENGTH_NEW {MAXIMUM CURRENT}  -to {$name}
             set_instance_assignment  -name SLOW_SLEW_RATE off  -to {$name}
@@ -221,10 +246,17 @@ Design method loadAssignmentsQuartus {spinout projectFn} {
     $spinout runQuartusScript $script
     
     set f [open $tempResultFn r]
-    set dic [dict merge [read $f]]
+    set qPin [dict merge [read $f]]
     close $f
     #file delete $tempResultFn
-    puts results:\n$dic
+
+    dict for {name sig} $signals {
+        set p $qPin($name)
+        if { ! [string match PIN_* $p]} {
+            error "Quartus pin assignment for '$name' was not in the expected format: [string range $p 0 50]"
+        }
+        $sig setPinNum [string range $p 4 end]
+    }
     
 #get_location_assignment -to clock20m
 #PIN_G2
@@ -234,6 +266,12 @@ Design method loadAssignmentsQuartus {spinout projectFn} {
 class Pin {
     pinNum {}
     bank {}
+}
+
+Pin method validateCtor {} {
+    if {$bank eq {}} {
+        error "Pin '$pinNum' does not specify a bank.  A bank is always required."
+    }
 }
 
 class Bank {
@@ -335,6 +373,7 @@ class Spinout {
     quartusDir {}
     quartus_sh {}
     quartus_cmd {}
+    quartus_cdb {}
     quartus_sta {}
 }
 
@@ -358,9 +397,11 @@ proc {Spinout shortcuts} {} {
 # convenient accessors for important structures.
 Spinout method device {} {return $device}
 Spinout method pins {} {$device pins}
+Spinout method pin {pinNum} {$device pin $pinNum}
 Spinout method banks {} {$device banks}
 Spinout method design {} {return $design}
 Spinout method signals {} {$design signals}
+Spinout method signal {signalName} {$design signal $signalName}
 
 # specifies the directory where Quartus command-line tool binaries such as 
 # quartus_sh.exe can be found.  this must be done before any commands that
@@ -386,6 +427,7 @@ Spinout method findQuartusTools {} {
     # any further Quartus tools are just assumed to be in the same dir.
     set foundDir [file dirname $quartus_sh]
     set quartus_cmd [f+ $foundDir quartus_cmd]
+    set quartus_cdb [f+ $foundDir quartus_cdb]
     set quartus_sta [f+ $foundDir quartus_sta]
 }
 
