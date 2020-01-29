@@ -351,6 +351,7 @@ Device method loadPackageIntelPinoutFile {pinoutCsvFn packageColumnName} {
     }
     
     # load the CsvFile contents into the Device data structure.
+    #TODO: find out why the DataTable doesn't contain power supply and other pins.  it should.  and we should be memorizing those here in some way.
     foreach row [$tbl rows] {
         set pinNum [$row byName $packageColumnName]
         if {$pinNum eq {}} continue ;# skip blank lines and commentary lines.

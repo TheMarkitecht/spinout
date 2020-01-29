@@ -16,7 +16,7 @@ loadDesignNotionCsv tests/Pin-List.csv
 puts "loaded [dict size [signals]] signals on [dict size [banks]] banks."
 saveAssignmentsQuartus tests/io_assign.tcl
 
-
-# extract existing pin number assignments from Quartus.
+# extract pinout from Quartus.
 setQuartusDir C:/intelFPGA_lite/18.1/quartus/bin64
-loadAssignmentsQuartus junk
+loadPackageIntelPinoutFile  tests/10cl040.csv  F484
+puts "loaded [dict size [pins]] pins on [dict size [banks]] banks."
