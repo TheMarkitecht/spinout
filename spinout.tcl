@@ -252,6 +252,7 @@ Design method loadAssignmentsQuartus {spinout projectFn} {
 
     dict for {name sig} $signals {
         set p $qPin($name)
+        if {$p eq {}} continue ;# signal was not assigned any pin in Quartus; skip it.
         if { ! [string match PIN_* $p]} {
             error "Quartus pin assignment for '$name' was not in the expected format: [string range $p 0 50]"
         }
@@ -264,7 +265,7 @@ Design method loadAssignmentsQuartus {spinout projectFn} {
 
 ######  classes modeling the device package.  ####################
 class Pin {
-    pinNum {}
+    num {}
     bank {}
 }
 
@@ -293,8 +294,76 @@ Device method newLoad {partNum deviceFn} {
 Device method newEmpty {partNum} {
 }
 
-Device method applyPackageQuartus {projectPath} {
-    #TODO: extract the device package's available pins and banks into the device object model.
+# extract the device package's available pins and banks into the device object model.
+# the Device must be empty so far.  any pins already existing in the Device 
+# data structure will cause an error.
+# this uses an Intel "FPGA pin-out file" manually downloaded from the Documentation 
+# or Literature section of Intel's web site, such as:
+# https://www.intel.com/content/www/us/en/programmable/support/literature/lit-dp.html
+# there choose to download the XLS version of the file, since that's the only format
+# offered that has usable separators in it.
+# then manually open that file in Microsoft Excel.  at the bottom choose the worksheet
+# tab named for the package you intend to use.  then choose File / Save As.
+# for the format choose "CSV (Comma delimited) (*.csv)".  choose an easily accessible
+# directory and file name and save it.  
+# pass that directory and file name to this method.
+# also pass the name Intel gave at the top of the column containing the pin numbers.
+# for example F484 is the column name Intel gave for the F484 package.
+Device method loadPackageIntelPinoutFile {pinoutCsvFn packageColumnName} {
+    #TODO: rework this process to load up device pins directly from quartus, avoiding the pinout file entirely.
+    # the following methods have already failed to provide useful data for that:
+    # quartus_sh
+    #       project_open ...
+    #       get_names -node_type pin
+    # quartus_cdb
+    #       load_package chip_planner
+    #       project_open ...
+    #       get_nodes -type all
+
+    if {[dict size $pins]} {
+        error "Device '$partNum' already contains pins, so cannot load file '$pinoutCsvFn'."
+    }
+
+    # find the data headers row, ignoring the numerous title rows etc. before it.
+    # that will be the row containing the given column name between separators, or
+    # at the start or end of the line.
+    set headerRe "(^|,)${packageColumnName}($|,)"
+    set rawf [open $pinoutCsvFn r]
+    while {1} {
+        if {[eof $rawf]} {
+            error "Column header '$packageColumnName' was not found in file '$pinoutCsvFn'"
+        }
+        gets $rawf lin
+        if {[regexp -nocase $headerRe $lin]} break
+    }
+    
+    # write the data headers row and all remaining rows to a temporary file.
+    set trimmedFn [f+ [systemTempDir] pinout.csv]
+    set trimf [open $trimmedFn w]
+    puts $trimf $lin
+    puts $trimf [read $rawf]
+    close $trimf
+    
+    # read the trimmed file into a CsvFile data structure.
+    set tbl [CsvFile new newLoad $trimmedFn]
+    if {[$tbl colmByName $packageColumnName] eq {}} {
+        error "Column header '$packageColumnName' was not found in file '$pinoutCsvFn', or there was a problem translating it."
+    }
+    
+    # load the CsvFile contents into the Device data structure.
+    foreach row [$tbl rows] {
+        set pinNum [$row byName $packageColumnName]
+        if {$pinNum eq {}} continue
+        set bankNum [$row byName {Bank Number}]
+        if { ! [string match {B[01-9]*} $bankNum]} {
+            error "Pin '$pinNum' specifies bank number '$bankNum' which is not in the expected format."
+        }
+        set bankNum [string range $bankNum 1 end]
+        if { ! [$self bankExists $bankNum]} {
+            $self addBank $bankNum
+        }
+        $self addPin $pinNum $bankNum
+    }
 }
 
 Device method pinExists {pinNum} {
@@ -320,11 +389,18 @@ Device method bank {bankNum} {
 }
 
 Device method addPin {pinNum bankNum} {
+    set pinNum [string trim $pinNum]
+    if {$pinNum eq {}} {error "Pin number is empty."}
+    set bankNum [string trim $bankNum]
+    if {$bankNum eq {}} {error "Bank number is empty."}
     if {[exists pins($pinNum)]} {error "Pin $pinNum already exists."}
-    return [set pins($pinNum) [Pin new set pinNum $pinNum bank $banks($bankNum)]]
+    if {! [exists banks($bankNum)]} {error "Bank $bankNum does not exist."}
+    return [set pins($pinNum) [Pin new set num $pinNum bank $banks($bankNum)]]
 }
 
 Device method addBank {bankNum} {
+    set bankNum [string trim $bankNum]
+    if {$bankNum eq {}} {error "Bank number is empty."}
     if {[exists banks($bankNum)]} {error "Bank $bankNum already exists."}
     return [set banks($bankNum) [Bank new set num $bankNum]]
 }
@@ -350,6 +426,7 @@ Device method inferFromNotion {tbl} {
 
 ######  classes modeling the user's available commands  ####################
 
+# this is used to detect and avoid the inner workings of the OOP system.
 class EmptyClass {} {
     junk {}
 }
@@ -465,14 +542,15 @@ Spinout method loadDesignNotionCsv {csvFn} {
     set design [Design new newLoadNotionCsv $device $csvFn]
 }
 
-Spinout method applyBanksNotionCsv {csvFn} {
+Spinout method loadBanksNotionCsv {csvFn} {
     #TODO: take advantage of a second invocation of loadDesignNotionCsv.  extract from that design object graph then throw it away.
 }
 
-Spinout method applyPackageQuartus {projectPath} {
+Spinout method loadPackageIntelPinoutFile {pinoutCsvFn packageColumnName} {
+    $device loadPackageIntelPinoutFile $pinoutCsvFn $packageColumnName
 }
 
-Spinout method applyFittedPinsQuartus {} {
+Spinout method loadFittedPinsQuartus {} {
     #TODO: detect path to Quartus from environment, or from user.
     # use that to invoke Quartus shells, with generated scripts.
     # use those to extract e.g. fitted pin location assignments.
