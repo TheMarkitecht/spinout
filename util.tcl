@@ -205,3 +205,8 @@ proc formatPathFor {path executableFn} {
     return [toPosixPath $path]
 }
 
+# return the path to the system null device, such as /dev/null.
+proc systemNullDevice {} {
+    if {[file exists /dev/null]} {return /dev/null}
+    return NUL ;# on a Windows system.
+}

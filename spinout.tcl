@@ -69,6 +69,7 @@ class Signal {
     direction {}
     standard {}
     rate {}
+    changes {}
 }
 
 # ctor loading a Signal from a row of a Notion exported CSV file describing it.
@@ -103,19 +104,23 @@ Signal method newFromNotionRow {design_ row} {
 
 # generate a list of column headers for a Notion exported CSV file describing a signal.
 proc {Signal toNotionRowHeaders} {} {
-    list Signal {I/O Bank} Location
+    list Signal {I/O Bank} Location Changes
 }
 
 # generate a list of values for row of a Notion exported CSV file describing this signal.
 Signal method toNotionRow {} {
-    set pinNum {}
-    if {$pin ne {}} {set pinNum [$pin num]}
-    list [$self name] [$self bankNum] $pinNum
+    list $name [$self bankNum] [$self pinNum] [join $changes , ]
 }
 
 Signal method setPinNum {pinNum} {
     set prelimBank {}
     set pin [[$design device] pin $pinNum]
+}
+
+# can return the number of the pin if it's known, or an empty string.
+Signal method pinNum {} {
+    if {$pin ne {}} {return [$pin num]}
+    return {}
 }
 
 Signal method setPrelimBankNum {bankNum} {
@@ -136,6 +141,10 @@ Signal method bankNum {} {
         return [$prelimBank num]
     }
     return {}
+}
+
+Signal method appendChange {changeLabel} {
+    lappend changes $changeLabel
 }
 
 proc {Signal compareNames} {sigA sigB} {
@@ -176,9 +185,6 @@ Design method newLoadNotionCsv {device_ csvFn} {
     set device $device_
     
     set tbl [CsvFile new newLoad $csvFn]
-    
-    # this step, setting up the device right here, should be made obsolete in the future.
-    $device inferFromNotion $tbl
     
     # read rows into Signal objects.
     foreach row [$tbl rows] {
@@ -290,9 +296,32 @@ Design method loadPinLocationsQuartus {spinout projectFn} {
         }
         $sig setPinNum [string range $p 4 end]
     }
-    
-#get_location_assignment -to clock20m
-#PIN_G2
+}
+
+# compare to the given older design.  annotate the current design's data structure
+# indicating which signals are added, moved to another pin, or to another bank.
+# returns the total number of signals with differences.
+Design method compareTo {oldDesign} {
+    set tot 0
+    dict for {name sig} $signals {
+        set found 0
+        if {[$oldDesign signalExists $name]} {
+            set oldSig [$oldDesign signal $name]
+            if {[$sig pinNum] != [$oldSig pinNum]} {
+                $sig appendChange PinMoved
+                set found 1
+            }
+            if {[$sig bankNum] != [$oldSig bankNum]} {
+                $sig appendChange BankMoved
+                set found 1
+            }
+        } else {
+            $sig appendChange Added
+            set found 1
+        }
+        incr tot $found
+    }
+    return $tot    
 }
 
 ######  classes modeling the device package.  ####################
@@ -313,17 +342,24 @@ class Bank {
 
 # banks and pins are kept in dictionaries rather than lists, to allow for different vendors' numbering schemes.
 class Device {
+    brand {}
     partNum {}
+    techFamily {}
+    density {}
+    package {}
     pins {}
     banks {}
 }
 
-# ctor loading a Device from a Spinout device file describing it.
-Device method newLoad {partNum deviceFn} {
+# class method creating and returning a new empty Device from a Spinout device 
+# library describing it.  the instance returned will be of a subclass of Device.
+proc {Device createFromLibrary} {brand techFamily partNum} {
+    source [Device libFn $brand $techFamily]
+    Device_${brand}_$partNum  new  newEmpty
 }
 
-# ctor creating a new empty Device with just a part number.
-Device method newEmpty {partNum} {
+proc {Device libFn} {brand techFamily} {
+    f+ $::spinoutDir device $brand ${techFamily}.tcl
 }
 
 # extract the device package's available pins and banks into the device object model.
@@ -439,25 +475,6 @@ Device method addBank {bankNum} {
     return [set banks($bankNum) [Bank new set num $bankNum]]
 }
 
-# builds an incomplete model of the device from whatever info can be extracted from the given
-# design's pin list table exported from Notion.
-# this method should be made obsolete in the future when complete device models can be extracted from Quartus.
-Device method inferFromNotion {tbl} {
-    # read rows into Pin objects.
-    foreach row [$tbl rows] {
-        set bankNum [$row byName {I/O Bank}]
-        if {$bankNum ne {}} {
-            if { ! [exists banks($bankNum)]} {
-                $self addBank $bankNum
-            }
-        }
-        set pinNum [$row byName {Location}]
-        if {$pinNum ne {}} {
-            $self addPin $pinNum $bankNum
-        }
-    }
-}
-
 ######  classes modeling the user's available commands  ####################
 
 # this is used to detect and avoid the inner workings of the OOP system.
@@ -555,7 +572,7 @@ Spinout method runQuartusScript {scriptText} {
     set f [open $scriptFn w]
     puts $f $scriptText
     close $f
-    set diagnosticText [x -ignore [$self quartus_sh] -t $qScriptFn]
+    set diagnosticText [x -ignore [$self quartus_sh] -t $qScriptFn <[systemNullDevice] ]
     #file delete $scriptFn
     if {$childExitStatus != 0} {
         puts stderr "\nQuartus shell failed: [$self quartus_sh]\nQuartus diagnostic output:\n\n${diagnosticText}\n"
@@ -564,30 +581,16 @@ Spinout method runQuartusScript {scriptText} {
     return $diagnosticText
 }
 
-Spinout method createDevice {brand partNum} {
-    set device [Device new set brand $brand partNum $partNum]
-}
-
-Spinout method loadDevice {deviceFn} {
-    set device [Device new newLoad $deviceFn]
+Spinout method createDevice {brand techFamily partNum} {
+    set device [Device createFromLibrary $brand $techFamily $partNum]
 }
 
 Spinout method loadDesignNotionCsv {csvFn} {
     set design [Design new newLoadNotionCsv $device $csvFn]
 }
 
-Spinout method loadBanksNotionCsv {csvFn} {
-    #TODO: take advantage of a second invocation of loadDesignNotionCsv.  extract from that design object graph then throw it away.
-}
-
 Spinout method loadPackageIntelPinoutFile {pinoutCsvFn packageColumnName} {
     $device loadPackageIntelPinoutFile $pinoutCsvFn $packageColumnName
-}
-
-Spinout method loadFittedPinsQuartus {} {
-    #TODO: detect path to Quartus from environment, or from user.
-    # use that to invoke Quartus shells, with generated scripts.
-    # use those to extract e.g. fitted pin location assignments.
 }
 
 Spinout method saveDesignNotionCsv {csvFn} {
@@ -606,6 +609,19 @@ Spinout method loadPinLocationsQuartus {projectFn} {
     $design loadPinLocationsQuartus $self $projectFn
 }
 
+Spinout method compareDesignToNotionCsv {csvFn} {
+    set other [Design new newLoadNotionCsv $csvFn]
+    puts "[$design compareTo $other] signals differ."
+}
+
+Spinout method compareDesignToQuartus {projectFn pinoutCsvFn packageColumnName} {
+    #TODO: encapsulate the following lines and their details into a reusable device setup script that can be sourced from anywhere.
+    set otherDev [
+    loadPinLocationsQuartus $projectFn
+    set other [Design new newLoadNotionCsv $csvFn]
+    puts "[$design compareTo $other] signals differ."
+}
+
 # removes (deletes) text lines containing tool messages output by Quartus tools.
 # messageTypes must be a Tcl list of one or more of:
 #   info  extra_info  warning  critical_warning  error
@@ -621,6 +637,7 @@ Spinout method removeMessages {messagetypes quartusOutputText} {
 ######  utility procedures  ####################
 
 ######  global variables and pseudo-constants.  ####################
+set ::spinoutDir [file dirname [info script]]
 set ::spinout {} ;# the singleton instance of Spinout.
 
 ######  main script.  ####################

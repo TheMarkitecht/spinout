@@ -1,0 +1,4 @@
+﻿Signal,Location,Feature,Direction,I/O Standard,I/O Bank,VREF Group,Differential Pair,Reserved,Current Strength,Slew Rate,Strict Preservation,Connected Part,Internal Pull,2.5v Migration Strategy,Ayan Pin Sweep Status,Ayan Schematic Update Status,Mark Pin Sweep Status,New Name,Related to Parts (Related to Pin List (Connected Part)),Traffic Level
+clk,,,Input,3.3-V LVTTL,1,,,,,,,,,,,,,,,
+enable,,,Input,3.3-V LVTTL,2,,,,,,,,,,,,,,,
+sync,,,Output,3.3-V LVTTL,3,,,,,,,,,,,,,,,
