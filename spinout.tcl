@@ -78,18 +78,18 @@ Signal method newFromNotionRow {design_ row} {
     
     set name [$row byName Signal]
     
-    set bankNum [$row byName {I/O Bank}]
-    set pinNum [$row byName Location]
-    if {$pinNum ne {}} {
-        if { ! [$device pinExists $pinNum]} {
-            error "Pin $pinNum doesn't exist.  Row: [$row vList]"
+    set rawBankNum [$row byName {I/O Bank}]
+    set rawPinNum [$row byName Location]
+    if {$rawPinNum ne {}} {
+        if { ! [$device pinExists $rawPinNum]} {
+            error "Pin $rawPinNum doesn't exist.  Row: [$row vList]"
         }
-        set pin [$device pin $pinNum]
-    } elseif {$bankNum ne {}} {
-        if { ! [$device bankExists $bankNum]} {
-            error "Bank $bankNum doesn't exist.  Row: [$row vList]"
+        set pin [$device pin $rawPinNum]
+    } elseif {$rawBankNum ne {}} {
+        if { ! [$device bankExists $rawBankNum]} {
+            error "Bank $rawBankNum doesn't exist.  Row: [$row vList]"
         }
-        set prelimBank [$device bank $bankNum]
+        set prelimBank [$device bank $rawBankNum]
     }
     
     foreach feat [split [$row byName Feature] , ] {
@@ -99,6 +99,18 @@ Signal method newFromNotionRow {design_ row} {
     set direction [$row byName Direction]
     set standard [$row byName {I/O Standard}]
     set rate [$row byName {Traffic Level}]
+}
+
+# generate a list of column headers for a Notion exported CSV file describing a signal.
+proc {Signal toNotionRowHeaders} {} {
+    list Signal {I/O Bank} Location
+}
+
+# generate a list of values for row of a Notion exported CSV file describing this signal.
+Signal method toNotionRow {} {
+    set pinNum {}
+    if {$pin ne {}} {set pinNum [$pin num]}
+    list [$self name] [$self bankNum] $pinNum
 }
 
 Signal method setPinNum {pinNum} {
@@ -158,6 +170,8 @@ Design method signal {signalName} {
 }
 
 # ctor loading a Design from a Notion exported CSV file describing it.
+# https://www.notion.so/Export-a-database-as-CSV-89654fbb61264d5eb2025a7606a8e3d4
+# https://theproductiveengineer.net/working-with-csv-files-in-notion-a-complete-guide/
 Design method newLoadNotionCsv {device_ csvFn} {
     set device $device_
     
@@ -181,6 +195,24 @@ Design method newLoadNotionCsv {device_ csvFn} {
         }
         set signals($name) $sig
     }
+}
+
+# save a Design to a CSV file describing it, suitable for importing into Notion.
+# many columns aren't included in this file.  that's because typically you wouldn't 
+# want to eliminate your existing Notion table (full of valuable notes etc.) and
+# start over with an all-new imported table.
+# https://www.notion.so/Import-data-into-Notion-18c37b470e8941789548b68049af750b
+# https://theproductiveengineer.net/working-with-csv-files-in-notion-a-complete-guide/
+# when merging into an old table in Notion, the best approach is to import the CSV 
+# into a new table in Notion.  then sort both tables the same way.  then copy and paste
+# whatever ranges of cells you need into the old table.  both vertical and horizontal
+# ranges of cells can be copied and pasted in Notion.  make some spare tables for practice.
+Design method saveNotionCsv {csvFn} {
+    set tbl [CsvFile new newColmNames [Signal toNotionRowHeaders]]
+    foreach sig [$self signalsSortedByName] {    
+        $tbl addRow [CsvRow new newValueList $tbl [$sig toNotionRow]]
+    }
+    $tbl save $csvFn
 }
 
 Design method signalsSortedByName {} {
@@ -559,6 +591,7 @@ Spinout method loadFittedPinsQuartus {} {
 }
 
 Spinout method saveDesignNotionCsv {csvFn} {
+    $design saveNotionCsv $csvFn
 }
 
 Spinout method saveAssignmentsQuartus {assignmentScriptFn} {

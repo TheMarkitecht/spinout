@@ -20,3 +20,6 @@ saveAssignmentsQuartus tests/io_assign.tcl
 setQuartusDir C:/intelFPGA_lite/18.1/quartus/bin64
 loadPackageIntelPinoutFile  tests/10cl040.csv  F484
 puts "loaded [dict size [pins]] pins on [dict size [banks]] banks."
+
+# save pinout to Notion CSV file.
+saveDesignNotionCsv tests/new-pin-list.csv

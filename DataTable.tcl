@@ -9,6 +9,14 @@ class DataTable {
     rows {}
 }
 
+DataTable method newColmNames {colmNames} {
+    foreach name $colmNames {
+        set c [DataColm new set name $name idx [llength $colmOrder]]
+        lappend colmOrder $c
+        set colms($name) $c
+    }
+}
+    
 DataTable method colmByName {colmName} {
     return $colms($colmName)
 }
@@ -31,6 +39,11 @@ class DataRow {
     table {}
     vList {}
     vDic {}
+}
+
+DataRow method newValueList {tbl valueList} {
+    set table $tbl
+    set vList $valueList
 }
 
 DataRow method setTable {tbl} {
@@ -64,8 +77,8 @@ class CsvFile DataTable {
 
 # load a csvFile object graph into memory from 
 # an ordinary .CSV disk file (comma-separated values).
-CsvFile method newLoad {rawFn} {
-    set fn $rawFn
+CsvFile method newLoad {csvFn} {
+    set fn $csvFn
     set f [open $fn r]
     set raw [string map [list \r {}] [read $f]]
     close $f
@@ -100,6 +113,16 @@ CsvFile method newLoad {rawFn} {
     }
 }
 
+CsvFile method save {csvFn} {
+    set f [open $csvFn w]
+    set cNames [lmap c $colmOrder {$c name}]
+    puts $f [join [lmap n $cNames {CsvRow quoteForFile $n}] , ]
+    foreach row $rows {
+        puts $f [$row toFile]
+    }
+    close $f
+}
+
 class CsvRow DataRow {
 }
 
@@ -121,3 +144,15 @@ set ::CsvRow::itemRe [string map [list { } {} \n {}] {
     (,|$)  
 }]
 
+set ::CsvRow::oneWordRe {^[a-zA-Z0-9_]*$}
+
+proc {CsvRow quoteForFile} {dataValue} {
+    if {[regexp $::CsvRow::oneWordRe $dataValue]} {
+        return $dataValue
+    }
+    return \"${dataValue}\"
+}
+
+CsvRow method toFile {} {
+    join [lmap v $vList {CsvRow quoteForFile $v}] ,
+}
