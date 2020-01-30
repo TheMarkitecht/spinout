@@ -109,7 +109,7 @@ proc {Signal toNotionRowHeaders} {} {
 
 # generate a list of values for row of a Notion exported CSV file describing this signal.
 Signal method toNotionRow {} {
-    list $name [$self bankNum] [$self pinNum] [join $changes , ]
+    list $name [$self bankNum] [$self pinNum] [join $changes {, } ]
 }
 
 Signal method setPinNum {pinNum} {
@@ -167,6 +167,10 @@ class Design {
     buses {}
 }
 
+Design method newEmpty {device_} {
+    set device $device_
+}
+
 Design method signalExists {signalName} {
     exists signals($signalName)
 }
@@ -178,12 +182,10 @@ Design method signal {signalName} {
     return $signals($signalName)
 }
 
-# ctor loading a Design from a Notion exported CSV file describing it.
+# load a Design from a Notion exported CSV file describing it.
 # https://www.notion.so/Export-a-database-as-CSV-89654fbb61264d5eb2025a7606a8e3d4
 # https://theproductiveengineer.net/working-with-csv-files-in-notion-a-complete-guide/
-Design method newLoadNotionCsv {device_ csvFn} {
-    set device $device_
-    
+Design method loadNotionCsv {csvFn} {
     set tbl [CsvFile new newLoad $csvFn]
     
     # read rows into Signal objects.
@@ -354,8 +356,17 @@ class Device {
 # class method creating and returning a new empty Device from a Spinout device 
 # library describing it.  the instance returned will be of a subclass of Device.
 proc {Device createFromLibrary} {brand techFamily partNum} {
-    source [Device libFn $brand $techFamily]
-    Device_${brand}_$partNum  new  newEmpty
+    set subclass Device_${brand}_$partNum
+    if { ! [exists -command $subclass]} {
+        source [Device libFn $brand $techFamily]
+    }
+    $subclass  new  newEmpty
+}
+
+# create and return a new empty Device with the same part number as the current device.
+# all device pins and banks are present and ready to use.
+Device method cloneEmpty {} {
+    Device createFromLibrary $brand $techFamily $partNum
 }
 
 proc {Device libFn} {brand techFamily} {
@@ -586,7 +597,8 @@ Spinout method createDevice {brand techFamily partNum} {
 }
 
 Spinout method loadDesignNotionCsv {csvFn} {
-    set design [Design new newLoadNotionCsv $device $csvFn]
+    set design [Design new newEmpty $device]
+    $design loadNotionCsv $csvFn
 }
 
 Spinout method loadPackageIntelPinoutFile {pinoutCsvFn packageColumnName} {
@@ -610,15 +622,17 @@ Spinout method loadPinLocationsQuartus {projectFn} {
 }
 
 Spinout method compareDesignToNotionCsv {csvFn} {
-    set other [Design new newLoadNotionCsv $csvFn]
+    set otherDev [$device cloneEmpty]
+    set other [Design new newEmpty $otherDev]
+    $other loadNotionCsv $csvFn
     puts "[$design compareTo $other] signals differ."
 }
 
-Spinout method compareDesignToQuartus {projectFn pinoutCsvFn packageColumnName} {
-    #TODO: encapsulate the following lines and their details into a reusable device setup script that can be sourced from anywhere.
-    set otherDev [
-    loadPinLocationsQuartus $projectFn
-    set other [Design new newLoadNotionCsv $csvFn]
+Spinout method compareDesignToQuartus {projectFn} {
+    set otherDev [$device cloneEmpty]
+    set other [Design new newEmpty $otherDev]
+    $self findQuartusTools
+    $other loadPinLocationsQuartus $self $projectFn
     puts "[$design compareTo $other] signals differ."
 }
 
