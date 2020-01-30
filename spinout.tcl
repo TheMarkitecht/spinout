@@ -225,7 +225,7 @@ Design method saveAssignmentsQuartus {assignmentScriptFn} {
 # projectFn must refer to a .qpf file.  on Windows, that name can be 
 # in c:\dir\name.qpf format,
 # or c:/dir/name.qpf format.
-Design method loadAssignmentsQuartus {spinout projectFn} {
+Design method loadPinLocationsQuartus {spinout projectFn} {
     set tmp [systemTempDir]
     set tempResultFn [f+ $tmp quartus.result]
     set quartusTempResultFn [formatPathFor $tempResultFn [$spinout quartus_sh]]
@@ -568,9 +568,9 @@ Spinout method saveAssignmentsQuartus {assignmentScriptFn} {
     # or, just insert it automatically.  through another command?
 }
 
-Spinout method loadAssignmentsQuartus {projectFn} {
+Spinout method loadPinLocationsQuartus {projectFn} {
     $self findQuartusTools
-    $design loadAssignmentsQuartus $self $projectFn
+    $design loadPinLocationsQuartus $self $projectFn
 }
 
 # removes (deletes) text lines containing tool messages output by Quartus tools.
