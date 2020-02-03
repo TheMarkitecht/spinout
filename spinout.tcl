@@ -79,8 +79,8 @@ Signal method newFromNotionRow {design_ row} {
     
     set name [$row byName Signal]
     
-    set rawBankNum [$row byName {I/O Bank}]
-    set rawPinNum [$row byName Location]
+    set rawBankNum [$row byName? {I/O Bank}]
+    set rawPinNum [$row byName? Location]
     if {$rawPinNum ne {}} {
         if { ! [$device pinExists $rawPinNum]} {
             error "Pin $rawPinNum doesn't exist.  Row: [$row vList]"
@@ -93,13 +93,12 @@ Signal method newFromNotionRow {design_ row} {
         set prelimBank [$device bank $rawBankNum]
     }
     
-    foreach feat [split [$row byName Feature] , ] {
+    foreach feat [split [$row byName? Feature] , ] {
         lappend features [string trim $feat]
     }
-    
-    set direction [$row byName Direction]
-    set standard [$row byName {I/O Standard}]
-    set rate [$row byName {Traffic Level}]
+    set direction [$row byName? Direction]
+    set standard [$row byName? {I/O Standard}]
+    set rate [$row byName? {Traffic Level}]
 }
 
 # generate a list of column headers for a Notion exported CSV file describing a signal.
@@ -229,6 +228,13 @@ Design method signalsSortedByName {} {
 
 Design method saveAssignmentsQuartus {assignmentScriptFn} {
     set asn [open $assignmentScriptFn w]
+    puts $asn {
+        remove_all_instance_assignments -name LOCATION 
+        remove_all_instance_assignments -name IO_STANDARD 
+        remove_all_instance_assignments -name CURRENT_STRENGTH_NEW 
+        remove_all_instance_assignments -name SLOW_SLEW_RATE 
+        remove_all_instance_assignments -name IO_MAXIMUM_TOGGLE_RATE 
+    }
     set rawTotal 0
     foreach sig [$self signalsSortedByName] {    
         set name [$sig name]   
@@ -238,8 +244,12 @@ Design method saveAssignmentsQuartus {assignmentScriptFn} {
         if {[$sig standard] eq {}} {
             error "Signal $name has no I/O standard assigned."
         }
+        if {[$sig pinNum] ne {}} {
+            puts $asn "            set_location_assignment  PIN_[$sig pinNum]  -to {$name}"
+        } elseif {[$sig bankNum] ne {}} {
+            puts $asn "            set_location_assignment  IOBANK_[$sig bankNum]  -to {$name}"
+        }
         puts $asn "
-            set_location_assignment  IOBANK_[$sig bankNum]  -to {$name}
             set_instance_assignment  -name IO_STANDARD {[$sig standard]}  -to {$name}
             set_instance_assignment  -name CURRENT_STRENGTH_NEW {MAXIMUM CURRENT}  -to {$name}
             set_instance_assignment  -name SLOW_SLEW_RATE off  -to {$name}
@@ -249,9 +259,7 @@ Design method saveAssignmentsQuartus {assignmentScriptFn} {
             if {[string is integer -strict $rate]} {
                 set rate "$rate MHz"
             }
-            puts $asn "
-            set_instance_assignment  -name IO_MAXIMUM_TOGGLE_RATE {$rate}  -to {$name}
-            "
+            puts $asn "            set_instance_assignment  -name IO_MAXIMUM_TOGGLE_RATE {$rate}  -to {$name}"
         }
         #TODO: assign actual drive current.
         #TODO: assign "power toggle rate" and "synchronizer toggle rate" in addition to max toggle rate.
@@ -453,7 +461,7 @@ Device method pinExists {pinNum} {
     
 Device method pin {pinNum} {
     if { ! [exists pins($pinNum)]} {
-        error "Pin $pinNum doesn't exist."
+        error "Pin '$pinNum' doesn't exist."
     }
     return $pins($pinNum)
 }
@@ -464,7 +472,7 @@ Device method bankExists {bankNum} {
     
 Device method bank {bankNum} {
     if { ! [exists banks($bankNum)]} {
-        error "Bank $bankNum doesn't exist."
+        error "Bank '$bankNum' doesn't exist."
     }
     return $banks($bankNum)
 }
@@ -597,6 +605,7 @@ Spinout method createDevice {brand techFamily partNum} {
 }
 
 Spinout method loadDesignNotionCsv {csvFn} {
+    #TODO: optionally unzip the markdown+CSV zip file exported by Notion.
     set design [Design new newEmpty $device]
     $design loadNotionCsv $csvFn
 }

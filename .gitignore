@@ -1,2 +1,4 @@
 obsolete
 *.exe
+tests/io_assign.tcl
+tests/*Out.csv
