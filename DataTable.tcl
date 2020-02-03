@@ -17,6 +17,10 @@ DataTable method newColmNames {colmNames} {
     }
 }
     
+DataTable method colmExists {colmName} {
+    dict exists $colms $colmName
+}
+
 DataTable method colmByName {colmName} {
     return $colms($colmName)
 }
@@ -66,7 +70,14 @@ DataRow method byIdx {colmIdx} {
 
 DataRow method byName {colmName} {
     # return the value in the given column name.
+    # throws an error if the column doesn't exist.
     # this is done without vDic, so vDic doesn't have to be built if it's not needed.
+    return [lindex $vList [[$table colmByName $colmName] idx]]
+}
+
+DataRow method byName? {colmName} {
+    # return the value in the given column name, or an empty string if the column doesn't exist.
+    if { ! [dict exists [$table colms] $colmName]} {return {}}
     return [lindex $vList [[$table colmByName $colmName] idx]]
 }
 
