@@ -300,11 +300,18 @@ Design method loadPinLocationsQuartus {spinout projectFn} {
 
     dict for {name sig} $signals {
         set p $qPin($name)
-        if {$p eq {}} continue ;# signal was not assigned any pin in Quartus; skip it.
-        if { ! [string match PIN_* $p]} {
+        if {$p eq {}} {
+            # signal was not assigned any pin in Quartus; skip it.
+        } elseif {[string match PIN_* $p]} {
+            $sig setPinNum [string range $p 4 end]
+        } elseif {[string match IOBANK_* $p]} {
+            $sig setPrelimBankNum [string range $p 7 end]
+            if { ! [string is integer -strict [$sig bankNum]]} {
+                error "Quartus bank assignment for '$name' was not in the expected format: [string range $p 0 50]"
+            }
+        } else {
             error "Quartus pin assignment for '$name' was not in the expected format: [string range $p 0 50]"
         }
-        $sig setPinNum [string range $p 4 end]
     }
 }
 
@@ -335,6 +342,8 @@ Design method compareTo {oldDesign} {
 }
 
 ######  classes modeling the device package.  ####################
+
+# this class will contain more variables in a future version.
 class Pin {
     num {}
     bank {}
@@ -346,6 +355,7 @@ Pin method validateCtor {} {
     }
 }
 
+# this class will contain more variables in a future version.
 class Bank {
     num {}
 }
