@@ -1,3 +1,25 @@
+# spinout
+# Copyright 2020 Mark Hubbard, a.k.a. "TheMarkitecht"
+# http://www.TheMarkitecht.com
+#
+# Project home:  http://github.com/TheMarkitecht/spinout
+# spinout is a superb pinout creation, maintenance, and conversion tool
+# for FPGA developers.
+#
+# This file is part of spinout.
+#
+# spinout is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Lesser General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# spinout is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public License
+# along with spinout.  If not, see <https://www.gnu.org/licenses/>.
 
 proc assert {exp {msg {}}} {
     tracer asserts "testing: $exp"
@@ -10,7 +32,7 @@ proc f+ {args} {
     return [file join {*}$args]
 }
 
-# returns 1 if the executable at the given path is built for Windows, 0 for 
+# returns 1 if the executable at the given path is built for Windows, 0 for
 # an executable for any other OS.
 proc isWindowsExecutable {executableFn} {
     file exists [file rootname $executableFn].exe
@@ -149,13 +171,13 @@ proc systemTempDir {} {
     return [env TEMP /tmp]
 }
 
-# returns the temporary file directory suggested by the Windows OS. 
+# returns the temporary file directory suggested by the Windows OS.
 # calling this is likely to throw an error on a non-Windows OS.
 proc windowsSystemTempDir {} {
     return [env TEMP]
 }
 
-# returns the temporary file directory suggested by the non-Windows OS. 
+# returns the temporary file directory suggested by the non-Windows OS.
 # this is likely to cause an error when trying to use this dir on a Windows OS.
 proc posixSystemTempDir {} {
     return /tmp

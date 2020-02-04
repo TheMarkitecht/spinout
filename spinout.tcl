@@ -1,8 +1,27 @@
 #!jimsh
 
-# Spinout
-# A Superb Pinout creation and maintenance tool for FPGA engineers.
-# by Mark Hubbard
+# spinout
+# Copyright 2020 Mark Hubbard, a.k.a. "TheMarkitecht"
+# http://www.TheMarkitecht.com
+#
+# Project home:  http://github.com/TheMarkitecht/spinout
+# spinout is a superb pinout creation, maintenance, and conversion tool
+# for FPGA developers.
+#
+# This file is part of spinout.
+#
+# spinout is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Lesser General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# spinout is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public License
+# along with spinout.  If not, see <https://www.gnu.org/licenses/>.
 
 # requires jimsh.  Jim is a modern, small-footprint, object-oriented Tcl interpreter.
 # http://jim.tcl.tk/
@@ -38,9 +57,9 @@
 # more often on Windows, because there, if you don't give the path to the jimsh
 # exectutable when you launch jimsh, Jim can't extract the path from Windows OS.
 # then it doesn't know where its executable is stored.  then it doesn't know
-# to search there.  
-# instead of "." (meaning the current working directory), you can also give 
-# an explicit path to the directory where spinout.tcl is stored.  you can also 
+# to search there.
+# instead of "." (meaning the current working directory), you can also give
+# an explicit path to the directory where spinout.tcl is stored.  you can also
 # give a list of paths to search, separated by colons (:).
 
 ######  load all required packages.  ####################
@@ -52,7 +71,7 @@ package require DataTable
 ######  classes modeling the design.  ####################
 
 # only one of pin or prelimBank are ever set.
-# if pin is known, it is set to a Pin object and prelimBank is empty.  
+# if pin is known, it is set to a Pin object and prelimBank is empty.
 # then the actual bank is accessible through the pin object.
 # if only the bank is known, then it's assumed to be a preliminary estimated
 # bank assignment.  then prelimBank is set to a Bank object and pin is empty.
@@ -76,9 +95,9 @@ class Signal {
 Signal method newFromNotionRow {design_ row} {
     set design $design_
     set device [$design device]
-    
+
     set name [$row byName Signal]
-    
+
     set rawBankNum [$row byName? {I/O Bank}]
     set rawPinNum [$row byName? Location]
     if {$rawPinNum ne {}} {
@@ -92,7 +111,7 @@ Signal method newFromNotionRow {design_ row} {
         }
         set prelimBank [$device bank $rawBankNum]
     }
-    
+
     foreach feat [split [$row byName? Feature] , ] {
         lappend features [string trim $feat]
     }
@@ -173,7 +192,7 @@ Design method newEmpty {device_} {
 Design method signalExists {signalName} {
     exists signals($signalName)
 }
-    
+
 Design method signal {signalName} {
     if { ! [exists signals($signalName)]} {
         error "Signal $signalName doesn't exist."
@@ -186,17 +205,17 @@ Design method signal {signalName} {
 # https://theproductiveengineer.net/working-with-csv-files-in-notion-a-complete-guide/
 Design method loadNotionCsv {csvFn} {
     set tbl [CsvFile new newLoad $csvFn]
-    
+
     # read rows into Signal objects.
     foreach row [$tbl rows] {
         set sig [Signal new newFromNotionRow $self $row]
         set name [$sig name]
-        
+
         # ignore obsolete pins etc.
         if {$name eq {}} continue
         if {{Remove Pin} in [$sig features]} continue
         if {[string match -nocase *(n) $name]} continue
-        
+
         if {[exists signals($name)]} {
             error "Signal $signalName already exists. Row: [$row vList]"
         }
@@ -205,18 +224,18 @@ Design method loadNotionCsv {csvFn} {
 }
 
 # save a Design to a CSV file describing it, suitable for importing into Notion.
-# many columns aren't included in this file.  that's because typically you wouldn't 
+# many columns aren't included in this file.  that's because typically you wouldn't
 # want to eliminate your existing Notion table (full of valuable notes etc.) and
 # start over with an all-new imported table.
 # https://www.notion.so/Import-data-into-Notion-18c37b470e8941789548b68049af750b
 # https://theproductiveengineer.net/working-with-csv-files-in-notion-a-complete-guide/
-# when merging into an old table in Notion, the best approach is to import the CSV 
+# when merging into an old table in Notion, the best approach is to import the CSV
 # into a new table in Notion.  then sort both tables the same way.  then copy and paste
 # whatever ranges of cells you need into the old table.  both vertical and horizontal
 # ranges of cells can be copied and pasted in Notion.  make some spare tables for practice.
 Design method saveNotionCsv {csvFn} {
     set tbl [CsvFile new newColmNames [Signal toNotionRowHeaders]]
-    foreach sig [$self signalsSortedByName] {    
+    foreach sig [$self signalsSortedByName] {
         $tbl addRow [CsvRow new newValueList $tbl [$sig toNotionRow]]
     }
     $tbl save $csvFn
@@ -229,15 +248,15 @@ Design method signalsSortedByName {} {
 Design method saveAssignmentsQuartus {assignmentScriptFn} {
     set asn [open $assignmentScriptFn w]
     puts $asn {
-        remove_all_instance_assignments -name LOCATION 
-        remove_all_instance_assignments -name IO_STANDARD 
-        remove_all_instance_assignments -name CURRENT_STRENGTH_NEW 
-        remove_all_instance_assignments -name SLOW_SLEW_RATE 
-        remove_all_instance_assignments -name IO_MAXIMUM_TOGGLE_RATE 
+        remove_all_instance_assignments -name LOCATION
+        remove_all_instance_assignments -name IO_STANDARD
+        remove_all_instance_assignments -name CURRENT_STRENGTH_NEW
+        remove_all_instance_assignments -name SLOW_SLEW_RATE
+        remove_all_instance_assignments -name IO_MAXIMUM_TOGGLE_RATE
     }
     set rawTotal 0
-    foreach sig [$self signalsSortedByName] {    
-        set name [$sig name]   
+    foreach sig [$self signalsSortedByName] {
+        set name [$sig name]
         if {[$sig bankNum] eq {}} {
             error "Signal $name has no bank assigned."
         }
@@ -270,21 +289,21 @@ Design method saveAssignmentsQuartus {assignmentScriptFn} {
 }
 
 # extract existing pin number assignments from Quartus.
-# projectFn must refer to a .qpf file.  on Windows, that name can be 
+# projectFn must refer to a .qpf file.  on Windows, that name can be
 # in c:\dir\name.qpf format,
 # or c:/dir/name.qpf format.
 Design method loadPinLocationsQuartus {spinout projectFn} {
     set tmp [systemTempDir]
     set tempResultFn [f+ $tmp quartus.result]
     set quartusTempResultFn [formatPathFor $tempResultFn [$spinout quartus_sh]]
-    
+
     set script "
         set signals {[lsort [dict keys $signals]]}
         project_open {[formatPathFor $projectFn [$spinout quartus_sh]]}
         set outf \[ open {$quartusTempResultFn} w \]
     "
     append script {
-        foreach sig $signals {    
+        foreach sig $signals {
             puts $outf [list $sig [get_location_assignment -to $sig]]
         }
         close $outf
@@ -292,7 +311,7 @@ Design method loadPinLocationsQuartus {spinout projectFn} {
     }
 
     $spinout runQuartusScript $script
-    
+
     set f [open $tempResultFn r]
     set qPin [dict merge [read $f]]
     close $f
@@ -338,7 +357,7 @@ Design method compareTo {oldDesign} {
         }
         incr tot $found
     }
-    return $tot    
+    return $tot
 }
 
 ######  classes modeling the device package.  ####################
@@ -371,7 +390,7 @@ class Device {
     banks {}
 }
 
-# class method creating and returning a new empty Device from a Spinout device 
+# class method creating and returning a new empty Device from a Spinout device
 # library describing it.  the instance returned will be of a subclass of Device.
 proc {Device createFromLibrary} {brand techFamily partNum} {
     set subclass Device_${brand}_$partNum
@@ -392,9 +411,9 @@ proc {Device libFn} {brand techFamily} {
 }
 
 # extract the device package's available pins and banks into the device object model.
-# the Device must be empty so far.  any pins already existing in the Device 
+# the Device must be empty so far.  any pins already existing in the Device
 # data structure will cause an error.
-# this uses an Intel "FPGA pin-out file" manually downloaded from the Documentation 
+# this uses an Intel "FPGA pin-out file" manually downloaded from the Documentation
 # or Literature section of Intel's web site, such as:
 # https://www.intel.com/content/www/us/en/programmable/support/literature/lit-dp.html
 # there choose to download the XLS version of the file, since that's the only format
@@ -402,7 +421,7 @@ proc {Device libFn} {brand techFamily} {
 # then manually open that file in Microsoft Excel.  at the bottom choose the worksheet
 # tab named for the package you intend to use.  then choose File / Save As.
 # for the format choose "CSV (Comma delimited) (*.csv)".  choose an easily accessible
-# directory and file name and save it.  
+# directory and file name and save it.
 # pass that directory and file name to this method.
 # also pass the name Intel gave at the top of the column containing the pin numbers.
 # for example F484 is the column name Intel gave for the F484 package.
@@ -433,20 +452,20 @@ Device method loadPackageIntelPinoutFile {pinoutCsvFn packageColumnName} {
         gets $rawf lin
         if {[regexp -nocase $headerRe $lin]} break
     }
-    
+
     # write the data headers row and all remaining rows to a temporary file.
     set trimmedFn [f+ [systemTempDir] pinout.csv]
     set trimf [open $trimmedFn w]
     puts $trimf $lin
     puts $trimf [read $rawf]
     close $trimf
-    
+
     # read the trimmed file into a CsvFile data structure.
     set tbl [CsvFile new newLoad $trimmedFn]
     if {[$tbl colmByName $packageColumnName] eq {}} {
         error "Column header '$packageColumnName' was not found in file '$pinoutCsvFn', or there was a problem translating it."
     }
-    
+
     # load the CsvFile contents into the Device data structure.
     #TODO: find out why the DataTable doesn't contain power supply and other pins.  it should.  and we should be memorizing those here in some way.
     foreach row [$tbl rows] {
@@ -468,7 +487,7 @@ Device method loadPackageIntelPinoutFile {pinoutCsvFn packageColumnName} {
 Device method pinExists {pinNum} {
     exists pins($pinNum)
 }
-    
+
 Device method pin {pinNum} {
     if { ! [exists pins($pinNum)]} {
         error "Pin '$pinNum' doesn't exist."
@@ -479,7 +498,7 @@ Device method pin {pinNum} {
 Device method bankExists {bankNum} {
     exists banks($bankNum)
 }
-    
+
 Device method bank {bankNum} {
     if { ! [exists banks($bankNum)]} {
         error "Bank '$bankNum' doesn't exist."
@@ -535,12 +554,12 @@ class Spinout {
 }
 
 # class method to initialize command shortcuts using a singleton instance of Spinout.
-# using this is optional.  without it, you can still instantiate and use Spinout's 
-# object models directly.  that way is less suitable for the command line, and 
+# using this is optional.  without it, you can still instantiate and use Spinout's
+# object models directly.  that way is less suitable for the command line, and
 # more suitable for integrating into a larger tool, workflow, or build automation system.
 proc {Spinout shortcuts} {} {
     set ::spinout [Spinout new]
-    
+
     # make each Spinout method accessible as a bare command name in the interp.
     # this way the user doesn't have to type "$spinout" on every command, and yet
     # the command still gets the benefits of being implemented as a method.
@@ -560,13 +579,13 @@ Spinout method design {} {return $design}
 Spinout method signals {} {$design signals}
 Spinout method signal {signalName} {$design signal $signalName}
 
-# specifies the directory where Quartus command-line tool binaries such as 
+# specifies the directory where Quartus command-line tool binaries such as
 # quartus_sh.exe can be found.  this must be done before any commands that
 # use Quartus or Quartus projects can be invoked.  otherwise those will
 # throw errors and abort the script.
-# this should name a specific Quartus version number and license edition.  
-# on Windows, this can be in the 
-# c:\dir\dir format, which is native for Windows, or the 
+# this should name a specific Quartus version number and license edition.
+# on Windows, this can be in the
+# c:\dir\dir format, which is native for Windows, or the
 # c:/dir/dir format, which is more convenient when working in Tcl.
 # for example C:/intelFPGA_lite/18.1/quartus/bin64
 # if you have only one installation of Quartus, you can use the standard
@@ -593,7 +612,7 @@ Spinout method findQuartusTools {} {
 # those are generally useless due to quartus writing lots of extra boilerplate output to them.
 # but their content is returned from this method just in case it's useful somehow.
 Spinout method runQuartusScript {scriptText} {
-    # create temporary file for script.  this approach is required instead of piping directly, 
+    # create temporary file for script.  this approach is required instead of piping directly,
     # to support longer scripts in certain operating system configurations.
     set tmp [systemTempDir]
     set scriptFn [f+ $tmp quartus.script]
@@ -658,7 +677,7 @@ Spinout method compareDesignToQuartus {projectFn} {
 # removes (deletes) text lines containing tool messages output by Quartus tools.
 # messageTypes must be a Tcl list of one or more of:
 #   info  extra_info  warning  critical_warning  error
-# if the wildcard * appears anywhere in the list, this will remove 
+# if the wildcard * appears anywhere in the list, this will remove
 # all types of messages from the text.
 Spinout method removeMessages {messagetypes quartusOutputText} {
     #TODO: delete this method.  it's impractical because Quartus outputs its "tcl>" prompt

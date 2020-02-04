@@ -1,3 +1,26 @@
+# spinout
+# Copyright 2020 Mark Hubbard, a.k.a. "TheMarkitecht"
+# http://www.TheMarkitecht.com
+#
+# Project home:  http://github.com/TheMarkitecht/spinout
+# spinout is a superb pinout creation, maintenance, and conversion tool
+# for FPGA developers.
+#
+# This file is part of spinout.
+#
+# spinout is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Lesser General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# spinout is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public License
+# along with spinout.  If not, see <https://www.gnu.org/licenses/>.
+
 ######  classes modeling data files  ####################
 
 # colms maps name to dataColm object.
@@ -16,7 +39,7 @@ DataTable method newColmNames {colmNames} {
         set colms($name) $c
     }
 }
-    
+
 DataTable method colmExists {colmName} {
     dict exists $colms $colmName
 }
@@ -56,7 +79,7 @@ DataRow method setTable {tbl} {
 
 DataRow method updateDic {row} {
     # map a list of values into a dictionary keyed by column headers.  memorize it in vDic.
-    # this costs extra time on thousands of rows, so don't do it if not needed. 
+    # this costs extra time on thousands of rows, so don't do it if not needed.
     set vDic [dict create]
     foreach v $vList h [$file colmOrder] {
         dict set vDic $h $v
@@ -86,7 +109,7 @@ class CsvFile DataTable {
     fn {}
 }
 
-# load a csvFile object graph into memory from 
+# load a csvFile object graph into memory from
 # an ordinary .CSV disk file (comma-separated values).
 CsvFile method newLoad {csvFn} {
     set fn $csvFn
@@ -98,8 +121,8 @@ CsvFile method newLoad {csvFn} {
 
     # parse header line into csvColm objects and an indexing array.
     set headers [[CsvRow new newParse $headerLine] vList]
-    # note that if the file was exported from Notion, it might contain nonprintable characters, 
-    # especially at the start of the file.  those can prevent a naive script from recognizing the header row.  
+    # note that if the file was exported from Notion, it might contain nonprintable characters,
+    # especially at the start of the file.  those can prevent a naive script from recognizing the header row.
     # here shave off characters to prevent that problem.
     lassign $headers hdr0
     if {[string range $hdr0 end-5 end] eq {Signal} } {
@@ -116,11 +139,11 @@ CsvFile method newLoad {csvFn} {
     # parse data rows into objects.
     foreach ln $dataLines {
         set row [CsvRow new newParse $ln]
-        
+
         # skip blank rows.
-        if {[$row byIdx 0] eq {} } continue    
-        
-        $self addRow $row    
+        if {[$row byIdx 0] eq {} } continue
+
+        $self addRow $row
     }
 }
 
@@ -149,10 +172,10 @@ CsvRow method newParse {rawTextLine} {
     }
 }
 
-set ::CsvRow::itemRe [string map [list { } {} \n {}] {  
-    ([^",]+?) (,|$)  |  
-    ["] ([^"]+?) ["] (,|$)  |  
-    (,|$)  
+set ::CsvRow::itemRe [string map [list { } {} \n {}] {
+    ([^",]+?) (,|$)  |
+    ["] ([^"]+?) ["] (,|$)  |
+    (,|$)
 }]
 
 set ::CsvRow::oneWordRe {^[a-zA-Z0-9_]*$}
