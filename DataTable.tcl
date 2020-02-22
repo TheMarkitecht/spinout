@@ -21,15 +21,17 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with spinout.  If not, see <https://www.gnu.org/licenses/>.
 
+package provide DataTable 1.0
+
 ######  classes modeling data files  ####################
 
 # colms maps name to dataColm object.
 # colmOrder lists the names in the order they appear in the file.
 # both methods of finding a column are required.
 class DataTable {
-    colms {}
-    colmOrder {}
-    rows {}
+    r colms {}
+    r colmOrder {}
+    r rows {}
 }
 
 DataTable method newColmNames {colmNames} {
@@ -58,14 +60,14 @@ DataTable method addRow {row} {
 }
 
 class DataColm {
-    name {}
-    idx 0
+    r name {}
+    r idx 0
 }
 
 class DataRow {
-    table {}
-    vList {}
-    vDic {}
+    r table {}
+    r vList {}
+    r vDic {}
 }
 
 DataRow method newValueList {tbl valueList} {
@@ -106,7 +108,7 @@ DataRow method byName? {colmName} {
 
 # CsvFile is a specialization (subclass) of DataTable.
 class CsvFile DataTable {
-    fn {}
+    p fn {}
 }
 
 # load a csvFile object graph into memory from

@@ -1,4 +1,4 @@
-#!jimsh
+#!/usr/bin/env jimsh
 
 # spinout
 # Copyright 2020 Mark Hubbard, a.k.a. "TheMarkitecht"
@@ -23,6 +23,8 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with spinout.  If not, see <https://www.gnu.org/licenses/>.
 
+set ::appDir [file join [pwd] [file dirname [info script]]]
+lappend auto_path $::appDir
 package require spinout
 Spinout shortcuts
 

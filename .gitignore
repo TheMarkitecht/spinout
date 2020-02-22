@@ -1,4 +1,6 @@
 obsolete
 *.exe
+slim.tcl
 tests/io_assign.tcl
 tests/*Out.csv
+examples/local

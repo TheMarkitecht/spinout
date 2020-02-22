@@ -21,6 +21,8 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with spinout.  If not, see <https://www.gnu.org/licenses/>.
 
+package provide util 1.0
+
 proc assert {exp {msg {}}} {
     tracer asserts "testing: $exp"
     if {$msg eq {}} {set msg "assert failed: $exp"}

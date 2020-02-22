@@ -1,4 +1,4 @@
-#!jimsh
+#!/usr/bin/env jimsh
 
 # spinout
 # Copyright 2020 Mark Hubbard, a.k.a. "TheMarkitecht"
@@ -78,18 +78,19 @@ package require DataTable
 # if both are unknown, both are empty.
 # features is a Tcl list of strings.
 class Signal {
-    design {}
-    name {}
-    bus {}
-    busIdx {}
-    pin {}
-    prelimBank {}
-    features {}
-    direction {}
-    standard {}
-    rate {}
-    changes {}
+    r design {}
+    r name {}
+    r bus {}
+    r busIdx {}
+    r pin {}
+    r prelimBank {}
+    r features {}
+    r direction {}
+    r standard {}
+    r rate {}
+    r changes {}
 }
+#TODO: rename all ctors from 'new' convention to 'from' convention.
 
 # ctor loading a Signal from a row of a Notion exported CSV file describing it.
 Signal method newFromNotionRow {design_ row} {
@@ -174,15 +175,15 @@ proc {Signal compareNames} {sigA sigB} {
 }
 
 class Bus {
-    name {}
-    min 0
-    max 0
+    r name {}
+    r min 0
+    r max 0
 }
 
 class Design {
-    device {}
-    signals {}
-    buses {}
+    r device {}
+    r signals {}
+    r buses {}
 }
 
 Design method newEmpty {device_} {
@@ -364,8 +365,8 @@ Design method compareTo {oldDesign} {
 
 # this class will contain more variables in a future version.
 class Pin {
-    num {}
-    bank {}
+    r num {}
+    r bank {}
 }
 
 Pin method validateCtor {} {
@@ -376,18 +377,18 @@ Pin method validateCtor {} {
 
 # this class will contain more variables in a future version.
 class Bank {
-    num {}
+    r num {}
 }
 
 # banks and pins are kept in dictionaries rather than lists, to allow for different vendors' numbering schemes.
 class Device {
-    brand {}
-    partNum {}
-    techFamily {}
-    density {}
-    package {}
-    pins {}
-    banks {}
+    r brand {}
+    r partNum {}
+    r techFamily {}
+    r density {}
+    r package {}
+    r pins {}
+    r banks {}
 }
 
 # class method creating and returning a new empty Device from a Spinout device
@@ -527,7 +528,7 @@ Device method addBank {bankNum} {
 
 # this is used to detect and avoid the inner workings of the OOP system.
 class EmptyClass {} {
-    junk {}
+    p junk {}
 }
 
 # Spinout class models the Spinout tool as a whole.
@@ -544,13 +545,13 @@ class EmptyClass {} {
 # many user commands will deal with those variables by default, without him
 # mentioning those variables explicitly.
 class Spinout {
-    device {}
-    design {}
-    quartusDir {}
-    quartus_sh {}
-    quartus_cmd {}
-    quartus_cdb {}
-    quartus_sta {}
+    r device {}
+    r design {}
+    r quartusDir {}
+    r quartus_sh {}
+    r quartus_cmd {}
+    r quartus_cdb {}
+    r quartus_sta {}
 }
 
 # class method to initialize command shortcuts using a singleton instance of Spinout.
@@ -693,5 +694,5 @@ set ::spinoutDir [file dirname [info script]]
 set ::spinout {} ;# the singleton instance of Spinout.
 
 ######  main script.  ####################
-package provide spinout 0.1
+package provide spinout 1.0
 
