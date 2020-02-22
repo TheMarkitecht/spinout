@@ -29,7 +29,7 @@ package require spinout
 Spinout shortcuts
 
 # CsvFile test
-set tbl [CsvFile new newLoad tests/LooneySyncerPinsIn.csv]
+set tbl [CsvFile new fromFile tests/LooneySyncerPinsIn.csv]
 puts "loaded [llength [$tbl rows]] rows with [llength [$tbl colmOrder]] columns."
 #foreach c [$tbl colmOrder] {
 #    puts "    [$c name]"

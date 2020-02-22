@@ -90,10 +90,9 @@ class Signal {
     r rate {}
     r changes {}
 }
-#TODO: rename all ctors from 'new' convention to 'from' convention.
 
 # ctor loading a Signal from a row of a Notion exported CSV file describing it.
-Signal method newFromNotionRow {design_ row} {
+Signal method fromNotionRow {design_ row} {
     set design $design_
     set device [$design device]
 
@@ -122,7 +121,7 @@ Signal method newFromNotionRow {design_ row} {
 }
 
 # generate a list of column headers for a Notion exported CSV file describing a signal.
-proc {Signal toNotionRowHeaders} {} {
+Signal classProc toNotionRowHeaders {} {
     list Signal {I/O Bank} Location Changes
 }
 
@@ -166,7 +165,7 @@ Signal method appendChange {changeLabel} {
     lappend changes $changeLabel
 }
 
-proc {Signal compareNames} {sigA sigB} {
+Signal classProc compareNames {sigA sigB} {
     set a [$sigA name]
     set b [$sigB name]
     if {$a < $b} {return -1}
@@ -186,7 +185,7 @@ class Design {
     r buses {}
 }
 
-Design method newEmpty {device_} {
+Design method fromDevice {device_} {
     set device $device_
 }
 
@@ -205,11 +204,11 @@ Design method signal {signalName} {
 # https://www.notion.so/Export-a-database-as-CSV-89654fbb61264d5eb2025a7606a8e3d4
 # https://theproductiveengineer.net/working-with-csv-files-in-notion-a-complete-guide/
 Design method loadNotionCsv {csvFn} {
-    set tbl [CsvFile new newLoad $csvFn]
+    set tbl [CsvFile new fromFile $csvFn]
 
     # read rows into Signal objects.
     foreach row [$tbl rows] {
-        set sig [Signal new newFromNotionRow $self $row]
+        set sig [Signal new fromNotionRow $self $row]
         set name [$sig name]
 
         # ignore obsolete pins etc.
@@ -235,9 +234,9 @@ Design method loadNotionCsv {csvFn} {
 # whatever ranges of cells you need into the old table.  both vertical and horizontal
 # ranges of cells can be copied and pasted in Notion.  make some spare tables for practice.
 Design method saveNotionCsv {csvFn} {
-    set tbl [CsvFile new newColmNames [Signal toNotionRowHeaders]]
+    set tbl [CsvFile new fromColmNames [Signal toNotionRowHeaders]]
     foreach sig [$self signalsSortedByName] {
-        $tbl addRow [CsvRow new newValueList $tbl [$sig toNotionRow]]
+        $tbl addRow [CsvRow new fromValueList $tbl [$sig toNotionRow]]
     }
     $tbl save $csvFn
 }
@@ -393,7 +392,7 @@ class Device {
 
 # class method creating and returning a new empty Device from a Spinout device
 # library describing it.  the instance returned will be of a subclass of Device.
-proc {Device createFromLibrary} {brand techFamily partNum} {
+Device classProc createFromLibrary {brand techFamily partNum} {
     set subclass Device_${brand}_$partNum
     if { ! [exists -command $subclass]} {
         source [Device libFn $brand $techFamily]
@@ -407,7 +406,7 @@ Device method cloneEmpty {} {
     Device createFromLibrary $brand $techFamily $partNum
 }
 
-proc {Device libFn} {brand techFamily} {
+Device classProc libFn {brand techFamily} {
     f+ $::spinoutDir device $brand ${techFamily}.tcl
 }
 
@@ -462,7 +461,7 @@ Device method loadPackageIntelPinoutFile {pinoutCsvFn packageColumnName} {
     close $trimf
 
     # read the trimmed file into a CsvFile data structure.
-    set tbl [CsvFile new newLoad $trimmedFn]
+    set tbl [CsvFile new fromFile $trimmedFn]
     if {[$tbl colmByName $packageColumnName] eq {}} {
         error "Column header '$packageColumnName' was not found in file '$pinoutCsvFn', or there was a problem translating it."
     }
@@ -558,7 +557,7 @@ class Spinout {
 # using this is optional.  without it, you can still instantiate and use Spinout's
 # object models directly.  that way is less suitable for the command line, and
 # more suitable for integrating into a larger tool, workflow, or build automation system.
-proc {Spinout shortcuts} {} {
+Spinout classProc shortcuts {} {
     set ::spinout [Spinout new]
 
     # make each Spinout method accessible as a bare command name in the interp.
@@ -636,7 +635,7 @@ Spinout method createDevice {brand techFamily partNum} {
 
 Spinout method loadDesignNotionCsv {csvFn} {
     #TODO: optionally unzip the markdown+CSV zip file exported by Notion.
-    set design [Design new newEmpty $device]
+    set design [Design new fromDevice $device]
     $design loadNotionCsv $csvFn
 }
 
@@ -662,14 +661,14 @@ Spinout method loadPinLocationsQuartus {projectFn} {
 
 Spinout method compareDesignToNotionCsv {csvFn} {
     set otherDev [$device cloneEmpty]
-    set other [Design new newEmpty $otherDev]
+    set other [Design new fromDevice $otherDev]
     $other loadNotionCsv $csvFn
     puts "[$design compareTo $other] signals differ."
 }
 
 Spinout method compareDesignToQuartus {projectFn} {
     set otherDev [$device cloneEmpty]
-    set other [Design new newEmpty $otherDev]
+    set other [Design new fromDevice $otherDev]
     $self findQuartusTools
     $other loadPinLocationsQuartus $self $projectFn
     puts "[$design compareTo $other] signals differ."

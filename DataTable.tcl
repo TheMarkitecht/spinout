@@ -34,7 +34,7 @@ class DataTable {
     r rows {}
 }
 
-DataTable method newColmNames {colmNames} {
+DataTable method fromColmNames {colmNames} {
     foreach name $colmNames {
         set c [DataColm new set name $name idx [llength $colmOrder]]
         lappend colmOrder $c
@@ -70,7 +70,7 @@ class DataRow {
     r vDic {}
 }
 
-DataRow method newValueList {tbl valueList} {
+DataRow method fromValueList {tbl valueList} {
     set table $tbl
     set vList $valueList
 }
@@ -113,7 +113,7 @@ class CsvFile DataTable {
 
 # load a csvFile object graph into memory from
 # an ordinary .CSV disk file (comma-separated values).
-CsvFile method newLoad {csvFn} {
+CsvFile method fromFile {csvFn} {
     set fn $csvFn
     set f [open $fn r]
     set raw [string map [list \r {}] [read $f]]
@@ -122,7 +122,7 @@ CsvFile method newLoad {csvFn} {
     unset raw
 
     # parse header line into csvColm objects and an indexing array.
-    set headers [[CsvRow new newParse $headerLine] vList]
+    set headers [[CsvRow new fromLine $headerLine] vList]
     # note that if the file was exported from Notion, it might contain nonprintable characters,
     # especially at the start of the file.  those can prevent a naive script from recognizing the header row.
     # here shave off characters to prevent that problem.
@@ -140,7 +140,7 @@ CsvFile method newLoad {csvFn} {
 
     # parse data rows into objects.
     foreach ln $dataLines {
-        set row [CsvRow new newParse $ln]
+        set row [CsvRow new fromLine $ln]
 
         # skip blank rows.
         if {[$row byIdx 0] eq {} } continue
@@ -163,7 +163,7 @@ class CsvRow DataRow {
 }
 
 # split a raw line of CSV text into a row of data values.
-CsvRow method newParse {rawTextLine} {
+CsvRow method fromLine {rawTextLine} {
     # remove surrounding quotes due to embedded commas.
     foreach {match bare delim1 quoted delim2 delim3} [regexp -all -inline $::CsvRow::itemRe $rawTextLine] {
         if {$quoted ne {}} {
@@ -182,7 +182,7 @@ set ::CsvRow::itemRe [string map [list { } {} \n {}] {
 
 set ::CsvRow::oneWordRe {^[a-zA-Z0-9_]*$}
 
-proc {CsvRow quoteForFile} {dataValue} {
+CsvRow classProc quoteForFile {dataValue} {
     if {[regexp $::CsvRow::oneWordRe $dataValue]} {
         return $dataValue
     }
