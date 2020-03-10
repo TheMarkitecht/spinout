@@ -87,7 +87,7 @@ class Signal {
     r features {}
     r direction {}
     r standard {}
-    r rate {}
+    r maxToggleRate {}
     r changes {}
 }
 
@@ -117,7 +117,7 @@ Signal method fromNotionRow {design_ row} {
     }
     set direction [$row byName? Direction]
     set standard [$row byName? {I/O Standard}]
-    set rate [$row byName? {Traffic Level}]
+    set maxToggleRate [$row byName? {Traffic Level}]
 }
 
 # generate a list of column headers for a Notion exported CSV file describing a signal.
@@ -273,12 +273,12 @@ Design method saveAssignmentsQuartus {assignmentScriptFn} {
             set_instance_assignment  -name CURRENT_STRENGTH_NEW {MAXIMUM CURRENT}  -to {$name}
             set_instance_assignment  -name SLOW_SLEW_RATE off  -to {$name}
         "
-        set rate [string trim [$sig rate]]
-        if {$rate ne {}} {
-            if {[string is integer -strict $rate]} {
-                set rate "$rate MHz"
+        set maxToggleRate [string trim [$sig maxToggleRate]]
+        if {$maxToggleRate ne {}} {
+            if {[string is integer -strict $maxToggleRate]} {
+                set maxToggleRate "$maxToggleRate MHz"
             }
-            puts $asn "            set_instance_assignment  -name IO_MAXIMUM_TOGGLE_RATE {$rate}  -to {$name}"
+            puts $asn "            set_instance_assignment  -name IO_MAXIMUM_TOGGLE_RATE {$maxToggleRate}  -to {$name}"
         }
         #TODO: assign actual drive current.
         #TODO: assign "power toggle rate" and "synchronizer toggle rate" in addition to max toggle rate.
