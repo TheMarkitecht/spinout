@@ -88,6 +88,8 @@ class Signal {
     r direction {}
     r standard {}
     r maxToggleRate {}
+    r drive {}
+    r slew {}
     r changes {}
 }
 
@@ -118,6 +120,8 @@ Signal method fromNotionRow {design_ row} {
     set direction [$row byName? Direction]
     set standard [$row byName? {I/O Standard}]
     set maxToggleRate [$row byName? {Traffic Level}]
+    set drive [$row byName? {Current Strength}]
+    set slew [$row byName? {Slew Rate}]
 }
 
 # generate a list of column headers for a Notion exported CSV file describing a signal.
@@ -214,7 +218,7 @@ Design method loadNotionCsv {csvFn} {
         # ignore obsolete pins etc.
         if {$name eq {}} continue
         if {{Remove Pin} in [$sig features]} continue
-        if {[string match -nocase *(n) $name]} continue
+        #if {[string match -nocase *(n) $name]} continue
 
         if {[exists signals($name)]} {
             error "Signal $signalName already exists. Row: [$row vList]"
@@ -251,7 +255,7 @@ Design method saveAssignmentsQuartus {assignmentScriptFn} {
         remove_all_instance_assignments -name LOCATION
         remove_all_instance_assignments -name IO_STANDARD
         remove_all_instance_assignments -name CURRENT_STRENGTH_NEW
-        remove_all_instance_assignments -name SLOW_SLEW_RATE
+        remove_all_instance_assignments -name SLEW_RATE
         remove_all_instance_assignments -name IO_MAXIMUM_TOGGLE_RATE
     }
     set rawTotal 0
@@ -270,8 +274,6 @@ Design method saveAssignmentsQuartus {assignmentScriptFn} {
         }
         puts $asn "
             set_instance_assignment  -name IO_STANDARD {[$sig standard]}  -to {$name}
-            set_instance_assignment  -name CURRENT_STRENGTH_NEW {MAXIMUM CURRENT}  -to {$name}
-            set_instance_assignment  -name SLOW_SLEW_RATE off  -to {$name}
         "
         set maxToggleRate [string trim [$sig maxToggleRate]]
         if {$maxToggleRate ne {}} {
@@ -280,8 +282,18 @@ Design method saveAssignmentsQuartus {assignmentScriptFn} {
             }
             puts $asn "            set_instance_assignment  -name IO_MAXIMUM_TOGGLE_RATE {$maxToggleRate}  -to {$name}"
         }
-        #TODO: assign actual drive current.
         #TODO: assign "power toggle rate" and "synchronizer toggle rate" in addition to max toggle rate.
+        set drive [string trim [$sig drive]]
+        if {$drive ne {}} {
+            if {[string is integer -strict $drive]} {
+                set drive "${drive}mA"
+            }
+            puts $asn "            set_instance_assignment  -name CURRENT_STRENGTH_NEW {$drive}  -to {$name}"
+        }
+        set slew [string trim [$sig slew]]
+        if {$slew ne {}} {
+            puts $asn "            set_instance_assignment  -name SLEW_RATE {$slew}  -to {$name}"
+        }
         incr rawTotal
     }
     puts $asn "# Assigned $rawTotal signals."
